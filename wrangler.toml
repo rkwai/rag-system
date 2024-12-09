@@ -1,0 +1,40 @@
+name = "edge-rag-system"
+
+compatibility_date = "2024-01-01"
+
+# Workers AI binding
+ai = { binding = "AI" }
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "rag_system"
+database_id = "local"
+preview_database_id = "local"
+
+# Vectorize
+[[vectorize]]
+binding = "VECTORSTORE"
+index_name = "documents"
+
+# KV Namespace
+[[kv_namespaces]]
+binding = "CACHE"
+id = "local"
+preview_id = "local"
+
+# R2 Bucket
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "rag-storage"
+
+[vars]
+ENVIRONMENT = "development"
+
+[env.local]
+# Local development specific settings
+workers_dev = true 
+
+[build]
+command = "npm run build"
+watch_dir = "src"
