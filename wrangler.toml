@@ -1,35 +1,33 @@
 name = "edge-rag-system"
 type = "javascript"
-account_id = "your_account_id"
+account_id = "57d898b95eafc96b1aabfcb389759c23"
 workers_dev = true
 compatibility_date = "2024-04-27"
 
-[[bindings]]
-type = "vectorize"
-name = "VECTORSTORE"
-index = "documents"
+[ai]
+binding = "AI"
 
-[[bindings]]
-type = "kv_namespace"
-name = "CACHE"
-namespace_id = "your_kv_namespace_id"
-
-[[bindings]]
-type = "d1_database"
-name = "DB"
+[[d1_databases]]
+binding = "DB"
 database_name = "rag_system"
+database_id = "rag_system"
+preview_database_id = "rag_system"
 
-[[bindings]]
-type = "r2_bucket"
-name = "STORAGE"
-bucket_name = "rag-storage"
+[[vectorize]]
+binding = "VECTORSTORE"
+index_name = "rag_system"
+dimension = 768
 
-[[bindings]]
-type = "vars"
-name = "ENVIRONMENT"
-text = "development"
+[[kv_namespaces]]
+binding = "CACHE"
+id = "rag_system_prod"
+preview_id = "rag_system"
 
-[[bindings]]
-type = "ai"
-name = "AI"
-model = "@cf/mistral/mixtral-8x7b-instruct-v0.1"
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "rag_system"
+preview_bucket_name = "rag_system"
+
+[vars]
+ENVIRONMENT = "development"
+MOCK_VECTORIZE = "true"

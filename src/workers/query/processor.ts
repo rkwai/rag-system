@@ -1,77 +1,70 @@
 import { Env } from '../../types/env';
-import { SearchResult } from '../../types/search';
+import { VECTOR_DIMENSION } from '../../utils/environment';
 
-export async function processQuery(
-  query: string,
-  options: { maxResults?: number; threshold?: number } = {},
-  env: Env
-): Promise<SearchResult> {
-  try {
-    // Validate input
-    if (!query) {
-      throw new Error('Query is required');
-    }
-
-    // Generate embedding for the query
-    const embedding = await generateEmbedding(query, env);
-    
-    // Search for relevant context
-    const context = await searchVectorStore(embedding, options, env);
-    
-    // Generate response using context
-    const response = await generateResponse(query, context, env);
-    
-    return {
-      query,
-      response,
-      context,
-      metadata: {
-        timestamp: new Date().toISOString(),
-        model: 'mixtral-8x7b'
-      }
-    };
-  } catch (error) {
-    console.error('Query processing error:', error);
-    throw error; // Preserve the original error
-  }
-}
-
-async function generateEmbedding(query: string, env: Env): Promise<Float32Array> {
+async function generateEmbedding(text: string, env: Env): Promise<Float32Array> {
   const response = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
-    text: query
+    text: text,
+    type: 'query'  // Note: Use 'query' type for queries
   });
   const valuesIterable = response.data[0].values();
   const values = Array.from(valuesIterable) as number[];
   return Float32Array.from(values);
 }
 
-async function searchVectorStore(embedding: Float32Array, options: { maxResults?: number }, env: Env) {
-  const { maxResults = 3 } = options;
-  
-  const results = await env.VECTORSTORE.query(
-    Array.from(embedding) as number[],
-    { topK: maxResults }
-  );
-  
-  return results.matches || [];
+export async function processQuery(
+  query: string, 
+  options: { maxResults?: number; threshold?: number } = {}, 
+  env: Env
+) {
+  try {
+    if (options.maxResults && options.maxResults < 0) {
+      throw new Error('maxResults must be a positive number');
+    }
+    const queryEmbedding = await generateEmbedding(query, env);
+    
+    const results = await env.VECTORSTORE.query(Array.from(queryEmbedding), {
+      topK: options.maxResults || 3
+    });
+
+    if (!results.matches || results.matches.length === 0) {
+      return {
+        response: "No relevant information found."
+      };
+    }
+
+    const response = await generateResponse(results.matches, query, env);
+    return { response };
+  } catch (error) {
+    console.error('Query processing error:', error);
+    throw new Error(`Failed to process query: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
-async function generateResponse(
-  query: string,
-  context: any[],
-  env: Env
-): Promise<string> {
-  const prompt = `
-    Context: ${context.map(c => c.text).join('\n')}
-    
-    Question: ${query}
-    
-    Please provide a detailed answer based on the context above.
-  `;
-  
-  const response = await env.AI.run('@cf/mistral/mixtral-8x7b-instruct-v0.1', {
-    messages: [{ role: 'user', content: prompt }]
+async function generateResponse(matches: any[], query: string, env: Env) {
+  const context = matches
+    .filter(match => match?.metadata?.content)
+    .map(match => match.metadata.content)
+    .join('\n');
+
+  if (!context) {
+    return "No relevant context found for the query.";
+  }
+
+  const response = await env.AI.run('@cf/meta/llama-2-7b-chat-int8', {
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a helpful assistant. Use the provided context to answer questions accurately and concisely.'
+      },
+      {
+        role: 'user',
+        content: `Context: ${context}\n\nQuestion: ${query}`
+      }
+    ],
+    stream: false // Ensure we get a complete response, not a stream
   });
-  
-  return response.response;
-} 
+
+  // Cast the response to the expected type
+  const result = response as unknown as { response: string };
+  return result.response;
+}

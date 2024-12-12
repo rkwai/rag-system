@@ -1,8 +1,16 @@
+import { VECTOR_DIMENSION } from './environment';
+
 export const mockAI = {
   async run(model: string, input: any) {
     if (model.includes('bge')) {
-      // Mock embedding
-      return new Float32Array(1024).fill(0.1);
+      // Mock embedding with correct dimension (384)
+      return {
+        data: [
+          {
+            values: () => Array.from({ length: VECTOR_DIMENSION }, () => Math.random())
+          }
+        ]
+      };
     } else {
       // Mock LLM response
       return {

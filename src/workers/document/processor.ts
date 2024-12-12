@@ -1,19 +1,15 @@
 import { Env } from '../../types/env';
 import { Document, ProcessedDocument } from '../../types/document';
-import { getAI } from '../../utils/environment';
+import { VECTOR_DIMENSION } from '../../utils/environment';
 
 async function generateEmbedding(text: string, env: Env): Promise<Float32Array> {
-  try {
-    const ai = getAI(env);
-    console.log('Generating embedding for text:', text.substring(0, 50) + '...');
-    const embedding = await ai.run('@cf/baai/bge-large-en-v1.5', {
-      text: text
-    });
-    return embedding;
-  } catch (error) {
-    console.error('Error generating embedding:', error);
-    throw new Error(`Embedding generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
+  const response = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+    text: text,
+    type: 'passage'
+  });
+  const valuesIterable = response.data[0].values();
+  const values = Array.from(valuesIterable) as number[];
+  return Float32Array.from(values);
 }
 
 export async function processDocument(
@@ -40,7 +36,8 @@ export async function processDocument(
             id: `${document.id}-${index}`,
             content: chunk,
             embedding: await generateEmbedding(chunk, env),
-            position: index
+            position: index,
+            documentId: document.id
           };
         } catch (error) {
           console.error(`Error processing chunk ${index}:`, error);
@@ -77,8 +74,13 @@ export async function processDocument(
 }
 
 function splitIntoChunks(text: string, maxChunkSize = 512): string[] {
-  // Simple sentence-based chunking
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+  // If text is shorter than max size, return as single chunk
+  if (text.length <= maxChunkSize) {
+    return [text];
+  }
+
+  // Split by sentences if possible
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   const chunks: string[] = [];
   let currentChunk = '';
   
@@ -114,40 +116,48 @@ async function storeDocumentMetadata(document: Document, env: Env) {
 }
 
 async function storeEmbeddings(chunks: any[], env: Env) {
-  try {
-    if (!Array.isArray(chunks) || chunks.length === 0) {
-      console.log('No chunks to store');
-      return;
-    }
+  if (!Array.isArray(chunks) || chunks.length === 0) {
+    console.log('No chunks to store');
+    return;
+  }
 
-    // Store in Vectorize
-    const vectors = chunks.map(chunk => ({
-      id: chunk.id,
+  if (VECTOR_DIMENSION !== 384) {
+    throw new Error(`Embedding dimension mismatch: expected ${VECTOR_DIMENSION}, got ${VECTOR_DIMENSION}`);
+  }
+
+  // Add environment prefix to IDs and metadata
+  const vectors = chunks.map(chunk => {
+    if (!chunk.id || !chunk.documentId || !chunk.embedding) {
+      throw new Error(`Missing required chunk properties: ${JSON.stringify(chunk)}`);
+    }
+    return {
+      id: `${env.ENVIRONMENT}_${chunk.id}`,
       values: Array.from(chunk.embedding) as number[],
       metadata: {
         content: chunk.content,
-        position: chunk.position
+        position: chunk.position,
+        environment: env.ENVIRONMENT
       }
-    }));
+    };
+  });
 
-    await env.VECTORSTORE.upsert(vectors);
-    
-    // Store in D1 for reference
-    for (const chunk of chunks) {
-      await env.DB.prepare(`
-        INSERT INTO chunks (id, document_id, content, embedding, position)
-        VALUES (?, ?, ?, ?, ?)
-      `).bind(
-        chunk.id,
-        chunk.documentId,
-        chunk.content,
-        JSON.stringify(Array.from(chunk.embedding)),
-        chunk.position
-      ).run();
+  await env.VECTORSTORE.upsert(vectors);
+  
+  // Store in D1 with environment prefix
+  for (const chunk of chunks) {
+    if (!chunk.documentId || !chunk.content || !chunk.embedding || chunk.position === undefined) {
+      throw new Error(`Missing required chunk properties: ${JSON.stringify(chunk)}`);
     }
-  } catch (error) {
-    console.error('Error storing embeddings:', error);
-    throw new Error(`Failed to store embeddings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO chunks (id, document_id, content, embedding, position)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(
+      `${env.ENVIRONMENT}_${chunk.id}`,
+      chunk.documentId,
+      chunk.content,
+      JSON.stringify(Array.from(chunk.embedding)),
+      chunk.position
+    ).run();
   }
 }
 

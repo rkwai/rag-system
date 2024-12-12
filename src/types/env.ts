@@ -7,6 +7,7 @@ export interface Env {
   CACHE: KVNamespace;
   STORAGE: R2Bucket;
   CACHE_TTL: string;
+  ENVIRONMENT: string;
 }
 
 export interface GenerationInput {

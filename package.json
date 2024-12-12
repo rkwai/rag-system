@@ -9,7 +9,9 @@
     "test": "concurrently \"wrangler dev src/index.ts --local --port 8787 --experimental-vectorize-bind-to-prod\" \"wait-on tcp:8787 && vitest\"",
     "test:watch": "concurrently \"wrangler dev src/index.ts --local --port 8787 --experimental-vectorize-bind-to-prod\" \"wait-on tcp:8787 && vitest --watch\"",
     "deploy": "wrangler deploy",
-    "setup:db": "wrangler d1 execute rag_system --local --file=./scripts/schema.sql"
+    "setup:db": "wrangler d1 execute rag_system --local --file=./scripts/schema.sql",
+    "setup": "ts-node scripts/setup.ts",
+    "pretest": "npm run setup"
   },
   "dependencies": {
     "drizzle-orm": "^0.29.3",
