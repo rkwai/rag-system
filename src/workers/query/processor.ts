@@ -7,6 +7,11 @@ export async function processQuery(
   env: Env
 ): Promise<SearchResult> {
   try {
+    // Validate input
+    if (!query) {
+      throw new Error('Query is required');
+    }
+
     // Generate embedding for the query
     const embedding = await generateEmbedding(query, env);
     
@@ -27,31 +32,28 @@ export async function processQuery(
     };
   } catch (error) {
     console.error('Query processing error:', error);
-    throw new Error('Failed to process query');
+    throw error; // Preserve the original error
   }
 }
 
-async function generateEmbedding(text: string, env: Env): Promise<Float32Array> {
-  const response = await env.AI.run('@cf/baai/bge-large-en-v1.5', {
-    text: text
+async function generateEmbedding(query: string, env: Env): Promise<Float32Array> {
+  const response = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+    text: query
   });
-  return response;
+  const valuesIterable = response.data[0].values();
+  const values = Array.from(valuesIterable) as number[];
+  return Float32Array.from(values);
 }
 
-async function searchVectorStore(
-  embedding: Float32Array,
-  options: { maxResults?: number; threshold?: number },
-  env: Env
-) {
-  const { maxResults = 3, threshold = 0.7 } = options;
+async function searchVectorStore(embedding: Float32Array, options: { maxResults?: number }, env: Env) {
+  const { maxResults = 3 } = options;
   
-  const results = await env.VECTORSTORE.query('documents', {
-    vector: embedding,
-    topK: maxResults,
-    filter: { threshold }
-  });
+  const results = await env.VECTORSTORE.query(
+    Array.from(embedding) as number[],
+    { topK: maxResults }
+  );
   
-  return results;
+  return results.matches || [];
 }
 
 async function generateResponse(

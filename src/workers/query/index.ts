@@ -25,17 +25,39 @@ export default {
    */
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
-      const data = await request.json();
-      const { query, options } = data as QueryRequest;
-      
-      const result = await processQuery(query, options, env);
-      
+      let data: Partial<QueryRequest>;
+      try {
+        data = await request.json();
+      } catch (e) {
+        return new Response(JSON.stringify({
+          error: 'Invalid JSON',
+          message: 'Request body must be valid JSON'
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Validate input
+      if (!data.query) {
+        return new Response(JSON.stringify({ 
+          error: 'Invalid request',
+          message: 'Query is required'
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const result = await processQuery(data.query, data.options || {}, env);
       return new Response(JSON.stringify(result), {
         headers: { 'Content-Type': 'application/json' }
       });
     } catch (error) {
+      console.error('Query processing error:', error);
       return new Response(JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Query processing failed',
+        message: error instanceof Error ? error.message : 'Unknown error'
       }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }

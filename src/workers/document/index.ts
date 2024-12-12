@@ -16,14 +16,12 @@ export default {
         return new Response('Method not allowed', { status: 405 });
       }
 
-      const data = await request.json();
-      const document = data as Document;
+      const data = await request.json() as Partial<Document>;
       
       // Validate required fields
-      if (!document.id || !document.content) {
+      if (!data.content || !data.id) {
         return new Response(JSON.stringify({
-          error: 'Invalid document format',
-          details: 'Document must include id and content fields'
+          error: 'Document must include content and id'
         }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
@@ -31,17 +29,21 @@ export default {
       }
 
       // Process and store document
-      const result = await processDocument(document, env);
+      const result = await processDocument({
+        id: data.id,
+        content: data.content,
+        title: data.title || data.id,  // Use id as fallback title
+        metadata: data.metadata
+      } as Document, env);
       
-      return new Response(JSON.stringify(result), {
+      return new Response(JSON.stringify({ success: true, ...result }), {
         headers: { 'Content-Type': 'application/json' }
       });
     } catch (error) {
       console.error('Document processing error:', error);
       return new Response(JSON.stringify({ 
         error: 'Document processing failed',
-        message: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
+        message: error instanceof Error ? error.message : 'Unknown error'
       }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }

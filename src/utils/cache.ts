@@ -1,3 +1,5 @@
+import type { KVNamespace } from '@cloudflare/workers-types';
+
 export async function getCached<T>(
   key: string,
   namespace: KVNamespace,

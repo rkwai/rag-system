@@ -1,7 +1,9 @@
+import type { Ai, D1Database, KVNamespace, R2Bucket, VectorizeIndex } from '@cloudflare/workers-types';
+
 export interface Env {
-  AI: any; // Workers AI binding
+  AI: Ai;
   DB: D1Database;
-  VECTORSTORE: any; // Vectorize binding
+  VECTORSTORE: VectorizeIndex;
   CACHE: KVNamespace;
   STORAGE: R2Bucket;
   CACHE_TTL: string;

@@ -20,6 +20,9 @@ export async function processDocument(
   document: Document,
   env: Env
 ): Promise<ProcessedDocument> {
+  if (!document.content || !document.id) {
+    throw new Error('Document must include content and id');
+  }
   try {
     console.log('Processing document:', document.id);
 
@@ -94,8 +97,9 @@ function splitIntoChunks(text: string, maxChunkSize = 512): string[] {
 
 async function storeDocumentMetadata(document: Document, env: Env) {
   try {
+    // Optionally use INSERT OR REPLACE to handle upserts
     await env.DB.prepare(`
-      INSERT INTO documents (id, title, created_at, updated_at)
+      INSERT OR REPLACE INTO documents (id, title, created_at, updated_at)
       VALUES (?, ?, ?, ?)
     `).bind(
       document.id,
@@ -111,15 +115,22 @@ async function storeDocumentMetadata(document: Document, env: Env) {
 
 async function storeEmbeddings(chunks: any[], env: Env) {
   try {
+    if (!Array.isArray(chunks) || chunks.length === 0) {
+      console.log('No chunks to store');
+      return;
+    }
+
     // Store in Vectorize
-    await env.VECTORSTORE.upsert('documents', chunks.map(chunk => ({
+    const vectors = chunks.map(chunk => ({
       id: chunk.id,
-      values: chunk.embedding,
+      values: Array.from(chunk.embedding) as number[],
       metadata: {
         content: chunk.content,
         position: chunk.position
       }
-    })));
+    }));
+
+    await env.VECTORSTORE.upsert(vectors);
     
     // Store in D1 for reference
     for (const chunk of chunks) {
@@ -130,7 +141,7 @@ async function storeEmbeddings(chunks: any[], env: Env) {
         chunk.id,
         chunk.documentId,
         chunk.content,
-        JSON.stringify(chunk.embedding),
+        JSON.stringify(Array.from(chunk.embedding)),
         chunk.position
       ).run();
     }
