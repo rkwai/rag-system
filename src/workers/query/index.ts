@@ -1,15 +1,28 @@
 import { Env } from '../../types/env';
 import { processQuery } from './processor';
 
+/**
+ * Structure of an incoming query request
+ */
 interface QueryRequest {
+  /** Search query text */
   query: string;
+  /** Optional search parameters */
   options?: {
+    /** Maximum number of results to return */
     maxResults?: number;
+    /** Similarity threshold for vector search */
     threshold?: number;
   };
 }
 
 export default {
+  /**
+   * Handles incoming query requests
+   * @param request - The incoming HTTP request
+   * @param env - Environment bindings
+   * @returns Response with search results or error
+   */
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       const data = await request.json();

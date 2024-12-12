@@ -3,8 +3,15 @@ import { Document } from '../../types/document';
 import { processDocument } from './processor';
 
 export default {
+  /**
+   * Handles incoming document ingestion requests
+   * @param request - The incoming HTTP request
+   * @param env - Environment bindings
+   * @returns Response with processing result or error
+   */
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
+      // Verify HTTP method
       if (request.method !== 'POST') {
         return new Response('Method not allowed', { status: 405 });
       }
@@ -12,6 +19,7 @@ export default {
       const data = await request.json();
       const document = data as Document;
       
+      // Validate required fields
       if (!document.id || !document.content) {
         return new Response(JSON.stringify({
           error: 'Invalid document format',
@@ -22,6 +30,7 @@ export default {
         });
       }
 
+      // Process and store document
       const result = await processDocument(document, env);
       
       return new Response(JSON.stringify(result), {
