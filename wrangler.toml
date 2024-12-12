@@ -11,7 +11,6 @@ binding = "AI"
 binding = "DB"
 database_name = "rag_system"
 database_id = "rag_system"
-preview_database_id = "rag_system"
 
 [[vectorize]]
 binding = "VECTORSTORE"
@@ -20,13 +19,11 @@ dimension = 768
 
 [[kv_namespaces]]
 binding = "CACHE"
-id = "rag_system_prod"
-preview_id = "rag_system"
+id = "rag_system"
 
 [[r2_buckets]]
 binding = "STORAGE"
-bucket_name = "rag_system"
-preview_bucket_name = "rag_system"
+bucket_name = "rag-system"
 
 [vars]
 ENVIRONMENT = "development"

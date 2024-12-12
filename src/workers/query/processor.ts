@@ -1,5 +1,4 @@
 import { Env } from '../../types/env';
-import { VECTOR_DIMENSION } from '../../utils/environment';
 
 async function generateEmbedding(text: string, env: Env): Promise<Float32Array> {
   const response = await env.AI.run('@cf/baai/bge-base-en-v1.5', {

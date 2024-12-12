@@ -1,6 +1,5 @@
 import { Env } from '../../types/env';
 import { Document, ProcessedDocument } from '../../types/document';
-import { VECTOR_DIMENSION } from '../../utils/environment';
 
 async function generateEmbedding(text: string, env: Env): Promise<Float32Array> {
   const response = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
@@ -119,10 +118,6 @@ async function storeEmbeddings(chunks: any[], env: Env) {
   if (!Array.isArray(chunks) || chunks.length === 0) {
     console.log('No chunks to store');
     return;
-  }
-
-  if (VECTOR_DIMENSION !== 384) {
-    throw new Error(`Embedding dimension mismatch: expected ${VECTOR_DIMENSION}, got ${VECTOR_DIMENSION}`);
   }
 
   // Add environment prefix to IDs and metadata
