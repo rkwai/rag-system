@@ -98,19 +98,16 @@ function splitIntoChunks(text: string, maxChunkSize = 512): string[] {
 
 async function storeDocumentMetadata(document: Document, env: Env) {
   try {
-    // Optionally use INSERT OR REPLACE to handle upserts
     await env.DB.prepare(`
-      INSERT OR REPLACE INTO documents (id, title, created_at, updated_at)
-      VALUES (?, ?, ?, ?)
+      INSERT OR REPLACE INTO documents (id, content, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, datetime('now'), datetime('now'))
     `).bind(
       document.id,
-      document.title,
-      Date.now(),
-      Date.now()
+      document.content,
+      JSON.stringify(document.metadata)
     ).run();
   } catch (error) {
-    console.error('Error storing document metadata:', error);
-    throw new Error(`Failed to store document metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(`Failed to store document metadata: ${error}`);
   }
 }
 

@@ -1,30 +1,67 @@
-name = "edge-rag-system"
-type = "javascript"
+main = "src/index.ts"
 account_id = "57d898b95eafc96b1aabfcb389759c23"
 workers_dev = true
 compatibility_date = "2024-04-27"
 
-[ai]
+# Production environment
+[env.production]
+name = "edge-rag-system"
+
+[env.production.ai]
 binding = "AI"
 
-[[d1_databases]]
+[[env.production.d1_databases]]
 binding = "DB"
 database_name = "rag_system"
-database_id = "rag_system"
+database_id = "121be829-724b-40ce-8fa5-4aae7085e190"
+preview_database_id = "90bd0b74-bf3d-42a8-b663-0e652307a376"
 
-[[vectorize]]
+[[env.production.vectorize]]
 binding = "VECTORSTORE"
 index_name = "rag_system"
-dimension = 768
 
-[[kv_namespaces]]
+[[env.production.kv_namespaces]]
 binding = "CACHE"
-id = "rag_system"
+id = "74915c4a86544541b03eac27e0d97214"
+preview_id = "c65e9239be1f4062bab77194cd17a352"
 
-[[r2_buckets]]
+[[env.production.r2_buckets]]
 binding = "STORAGE"
 bucket_name = "rag-system"
+preview_bucket_name = "rag-system-preview"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+
+# Development environment
+[env.development]
+name = "edge-rag-system-dev"
+
+[env.development.ai]
+binding = "AI"
+
+[[env.development.d1_databases]]
+binding = "DB"
+database_name = "rag_system_preview"
+database_id = "121be829-724b-40ce-8fa5-4aae7085e190"
+preview_database_id = "90bd0b74-bf3d-42a8-b663-0e652307a376"
+
+[[env.development.vectorize]]
+binding = "VECTORSTORE"
+index_name = "rag_system_preview"
+
+[[env.development.kv_namespaces]]
+binding = "CACHE"
+id = "74915c4a86544541b03eac27e0d97214"
+preview_id = "c65e9239be1f4062bab77194cd17a352"
+
+[[env.development.r2_buckets]]
+binding = "STORAGE"
+bucket_name = "rag-system"
+preview_bucket_name = "rag-system-preview"
+
+[env.development.vars]
+ENVIRONMENT = "development"
 
 [vars]
 ENVIRONMENT = "development"
-MOCK_VECTORIZE = "true"

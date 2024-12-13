@@ -29,7 +29,7 @@ describe('API Endpoints', () => {
         body: JSON.stringify({
           id: 'test-doc-1',
           content: 'This is a test document for querying.',
-          title: 'Test Document'
+          metadata: { title: 'Test Document' }
         }),
       });
 
