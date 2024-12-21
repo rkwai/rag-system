@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { Env } from './types/env';
 import queryWorker from './workers/query';
 import documentWorker from './workers/document';
+import questWorker from './workers/quest';
+import playerWorker from './workers/player';
 
 const app = new Hono<{ Bindings: Env & { [key: string]: unknown } }>();
 
@@ -17,6 +19,48 @@ app.post('/query', async (c) => {
 // Document ingestion endpoint
 app.post('/document', async (c) => {
   const response = await documentWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+// Quest endpoints
+app.post('/quests', async (c) => {
+  const response = await questWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.post('/quests/history', async (c) => {
+  const response = await questWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.put('/quests/:id/progress', async (c) => {
+  const response = await questWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+// Player endpoints
+app.post('/players', async (c) => {
+  const response = await playerWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.get('/players/:id', async (c) => {
+  const response = await playerWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.put('/players/:id/location', async (c) => {
+  const response = await playerWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.post('/players/:id/inventory', async (c) => {
+  const response = await playerWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.post('/players/:id/experience', async (c) => {
+  const response = await playerWorker.fetch(c.req.raw, c.env as Env);
   return response;
 });
 
