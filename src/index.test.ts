@@ -267,7 +267,8 @@ describe('API Endpoints', () => {
       expect(player.experience).toBe(0);
       expect(player.gold).toBe(100); // Starting gold
       expect(player.location).toBe(newPlayer.location);
-      expect(player.inventory).toBeInstanceOf(Array);
+      expect(player.inventory).toHaveProperty('items');
+      expect(player.inventory).toHaveProperty('capacity');
       expect(player.stats).toMatchObject({
         health: 100,
         mana: 30,
@@ -326,25 +327,36 @@ describe('API Endpoints', () => {
       const createdPlayer = await createRes.json();
 
       // Add item to inventory
-      const newItem = {
-        name: 'Iron Sword',
-        type: 'weapon',
-        quantity: 1,
-        stats: {
-          damage: 10
-        }
-      };
+      const createItemRes = await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Iron Sword',
+          description: 'A sturdy iron sword',
+          type: 'weapon',
+          rarity: 'common',
+          properties: {
+            damage: 10
+          },
+          value: 100
+        }),
+      });
+      const item = await createItemRes.json();
 
       const addItemRes = await fetch(`${API_URL}/players/${createdPlayer.id}/inventory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newItem),
+        body: JSON.stringify({
+          itemId: item.id,
+          quantity: 1
+        }),
       });
 
       expect(addItemRes.status).toBe(200);
       const playerWithItem = await addItemRes.json();
-      expect(playerWithItem.inventory).toHaveLength(1);
-      expect(playerWithItem.inventory[0].name).toBe(newItem.name);
+      expect(Object.keys(playerWithItem.inventory.items)).toHaveLength(1);
+      expect(playerWithItem.inventory.items[item.id]).toBeDefined();
+      expect(playerWithItem.inventory.items[item.id].quantity).toBe(1);
     });
 
     it('should handle player experience and leveling', async () => {
@@ -390,6 +402,252 @@ describe('API Endpoints', () => {
           name: 'Invalid',
           class: 'InvalidClass', // Invalid class
           location: 'Test'
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const error = await res.json();
+      expect(error).toHaveProperty('error');
+    });
+  });
+
+  /**
+   * Item Management endpoint tests
+   */
+  describe('Item Management', () => {
+    const testItem = {
+      name: 'Test Sword',
+      description: 'A mighty test sword',
+      type: 'weapon' as const,
+      rarity: 'common' as const,
+      properties: {
+        damage: 10,
+        durability: 100
+      },
+      value: 100
+    };
+
+    it('should create a new item', async () => {
+      const res = await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testItem),
+      });
+
+      expect(res.status).toBe(200);
+      const item = await res.json();
+
+      // Verify item structure
+      expect(item).toHaveProperty('id');
+      expect(item.name).toBe(testItem.name);
+      expect(item.description).toBe(testItem.description);
+      expect(item.type).toBe(testItem.type);
+      expect(item.rarity).toBe(testItem.rarity);
+      expect(item.properties).toMatchObject(testItem.properties);
+      expect(item.value).toBe(testItem.value);
+      expect(item.questRelated).toBe(false);
+    });
+
+    it('should add item to player inventory', async () => {
+      // First create a player
+      const createPlayerRes = await fetch(`${API_URL}/players`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'TestHero',
+          class: 'Warrior',
+          location: 'Starting Village'
+        }),
+      });
+      const player = await createPlayerRes.json();
+
+      // Create an item
+      const createItemRes = await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testItem),
+      });
+      const item = await createItemRes.json();
+
+      // Add item to inventory
+      const res = await fetch(`${API_URL}/players/${player.id}/inventory/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemId: item.id,
+          quantity: 1
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const updatedPlayer = await res.json();
+      const inventoryItem = updatedPlayer.inventory.items[item.id];
+      expect(inventoryItem).toBeDefined();
+      expect(inventoryItem.quantity).toBe(1);
+      expect(inventoryItem.item.id).toBe(item.id);
+    });
+
+    it('should remove item from player inventory', async () => {
+      // First create a player with an item
+      const createPlayerRes = await fetch(`${API_URL}/players`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'TestHero',
+          class: 'Warrior',
+          location: 'Starting Village'
+        }),
+      });
+      const player = await createPlayerRes.json();
+
+      // Create and add an item
+      const createItemRes = await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testItem),
+      });
+      const item = await createItemRes.json();
+
+      await fetch(`${API_URL}/players/${player.id}/inventory/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemId: item.id,
+          quantity: 3
+        }),
+      });
+
+      // Remove some items
+      const res = await fetch(`${API_URL}/players/${player.id}/inventory/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemId: item.id,
+          quantity: 2
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const updatedPlayer = await res.json();
+      const inventoryItem = updatedPlayer.inventory.items[item.id];
+      expect(inventoryItem).toBeDefined();
+      expect(inventoryItem.quantity).toBe(1);
+    });
+
+    it('should get items by type', async () => {
+      // Create a player
+      const createPlayerRes = await fetch(`${API_URL}/players`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'TestHero',
+          class: 'Warrior',
+          location: 'Starting Village'
+        }),
+      });
+      const player = await createPlayerRes.json();
+
+      // Add weapon and armor
+      const weapon = await (await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testItem),
+      })).json();
+
+      const armor = await (await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Test Armor',
+          description: 'A sturdy armor',
+          type: 'armor',
+          rarity: 'common',
+          properties: { defense: 5 },
+          value: 150
+        }),
+      })).json();
+
+      // Add both to inventory
+      await fetch(`${API_URL}/players/${player.id}/inventory/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: weapon.id, quantity: 1 }),
+      });
+
+      await fetch(`${API_URL}/players/${player.id}/inventory/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: armor.id, quantity: 1 }),
+      });
+
+      // Get weapons
+      const res = await fetch(`${API_URL}/players/${player.id}/inventory/type/weapon`);
+      expect(res.status).toBe(200);
+      const weapons = await res.json();
+      expect(weapons).toHaveLength(1);
+      expect(weapons[0].item.type).toBe('weapon');
+    });
+
+    it('should handle inventory capacity', async () => {
+      // Create a player with small inventory
+      const createPlayerRes = await fetch(`${API_URL}/players`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'TestHero',
+          class: 'Warrior',
+          location: 'Starting Village',
+          inventoryCapacity: 1
+        }),
+      });
+      const player = await createPlayerRes.json();
+
+      // Create two items
+      const item1 = await (await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...testItem,
+          name: 'Item1'
+        }),
+      })).json();
+
+      const item2 = await (await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...testItem,
+          name: 'Item2'
+        }),
+      })).json();
+
+      // Add first item (should succeed)
+      const res1 = await fetch(`${API_URL}/players/${player.id}/inventory/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: item1.id, quantity: 1 }),
+      });
+      expect(res1.status).toBe(200);
+
+      // Try to add second item (should fail)
+      const res2 = await fetch(`${API_URL}/players/${player.id}/inventory/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: item2.id, quantity: 1 }),
+      });
+      expect(res2.status).toBe(400);
+      const error = await res2.json();
+      expect(error).toHaveProperty('error');
+    });
+
+    it('should handle invalid item creation', async () => {
+      const res = await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Invalid Item',
+          type: 'invalid_type', // Invalid type
+          rarity: 'super_rare', // Invalid rarity
         }),
       });
 

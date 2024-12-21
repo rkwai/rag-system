@@ -27,4 +27,9 @@ export interface ChatInput {
     role: 'system' | 'user' | 'assistant';
     content: string;
   }>;
+}
+
+export interface ExecutionContext {
+  waitUntil(promise: Promise<any>): void;
+  passThroughOnException(): void;
 } 
