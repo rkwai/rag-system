@@ -1,16 +1,16 @@
-# Edge RAG System
+# RPG Game with Edge RAG System
 
-An edge-first RAG (Retrieval-Augmented Generation) system leveraging Cloudflare's infrastructure for a serverless, globally distributed architecture.
+An AI-powered role-playing game where stories, items, and quests are dynamically generated and remembered using a RAG (Retrieval-Augmented Generation) system. Built on Cloudflare's edge infrastructure for global, low-latency gameplay.
 
 ## Features
 
+- Dynamic story generation using Mixtral 8x7B
+- Persistent game state with memory of items and quests
 - Edge-first architecture using Cloudflare Workers
-- Vector search with Cloudflare Vectorize
-- LLM integration with Workers AI (Mixtral 8x7B)
+- Vector search with Cloudflare Vectorize for memory retrieval
 - Document embedding with BGE-large-en-v1.5
-- Relational storage with D1
-- Object storage with R2
-- Caching with KV
+- Game state storage with D1 (SQL) and R2 (objects)
+- Performance optimization with KV caching
 
 ## Setup
 
@@ -24,7 +24,7 @@ npm install
 wrangler login
 ```
 
-3. Start local development:
+3. Start development (uses remote infrastructure):
 ```bash
 npm run dev
 ```
@@ -43,4 +43,15 @@ npm test
 
 ## Architecture
 
-See `spec.md` for detailed technical architecture documentation. 
+See `spec.md` for detailed technical architecture documentation.
+
+## System Requirements
+
+- Node.js 18+
+- Cloudflare account with:
+  - Workers AI access
+  - D1 database
+  - R2 storage
+  - KV namespace
+  - Vectorize instance
+  
