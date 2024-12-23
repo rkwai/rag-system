@@ -6,6 +6,7 @@ import documentWorker from './workers/document';
 import questWorker from './workers/quest';
 import playerWorker from './workers/player';
 import itemWorker from './workers/items';
+import gameWorker from './workers/game';
 
 const app = new Hono<{ Bindings: Env & { [key: string]: unknown } }>();
 
@@ -91,6 +92,37 @@ app.post('/players/:id/inventory/remove', async (c) => {
 
 app.get('/players/:id/inventory/type/:type', async (c) => {
   const response = await itemWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+// Game routes
+app.post('/game/action', async (c) => {
+  const response = await gameWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.post('/game/state/save', async (c) => {
+  const response = await gameWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.post('/game/state', async (c) => {
+  const response = await gameWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.get('/game/state/:playerId', async (c) => {
+  const response = await gameWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.post('/game/memory', async (c) => {
+  const response = await gameWorker.fetch(c.req.raw, c.env as Env);
+  return response;
+});
+
+app.post('/game/memory/context', async (c) => {
+  const response = await gameWorker.fetch(c.req.raw, c.env as Env);
   return response;
 });
 

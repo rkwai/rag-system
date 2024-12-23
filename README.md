@@ -12,6 +12,15 @@ An AI-powered role-playing game where stories, items, and quests are dynamically
 - Game state storage with D1 (SQL) and R2 (objects)
 - Performance optimization with KV caching
 
+## Gameplay mechanics
+
+- Player actions trigger story generation
+- Player mainly chats with the game master
+- Game master generates stories and updates game state based on player actions
+- Player can explore, collect items, and complete quests
+- Game state is stored in D1 and R2 for persistence
+- Player can view game state and continue story
+
 ## Setup
 
 1. Install dependencies:

@@ -1,7 +1,7 @@
 /**
  * Integration tests for the RAG System API endpoints
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const API_URL = 'http://localhost:8787';
 
@@ -654,6 +654,243 @@ describe('API Endpoints', () => {
       expect(res.status).toBe(400);
       const error = await res.json();
       expect(error).toHaveProperty('error');
+    });
+  });
+
+  /**
+   * Game Action Processing endpoint tests
+   */
+  describe('Game Action Processing', () => {
+    const testPlayer = {
+      id: 'player-1',
+      name: 'TestHero',
+      class: 'Warrior',
+      level: 5,
+      location: 'Dark Forest'
+    };
+
+    it('should process player action and return story response', async () => {
+      const res = await fetch(`${API_URL}/game/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: testPlayer.id,
+          action: 'I draw my sword and cautiously approach the mysterious cave entrance',
+          context: {
+            currentLocation: testPlayer.location,
+            inventory: [],
+            questStates: [],
+            gameHistory: []
+          }
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const response = await res.json();
+      expect(response).toHaveProperty('story');
+      expect(response).toHaveProperty('effects');
+      expect(response.story).toBeTypeOf('string');
+      expect(response.effects).toBeInstanceOf(Array);
+    }, 30000);  // 30 second timeout
+
+    it('should maintain context between actions', async () => {
+      // First action
+      const res1 = await fetch(`${API_URL}/game/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: testPlayer.id,
+          action: 'I find a mysterious glowing crystal',
+          context: {
+            currentLocation: testPlayer.location,
+            inventory: [],
+            questStates: [],
+            gameHistory: []
+          }
+        }),
+      });
+      const response1 = await res1.json();
+
+      // Second action referencing the first
+      const res2 = await fetch(`${API_URL}/game/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: testPlayer.id,
+          action: 'I try to pick up the crystal',
+          context: {
+            currentLocation: testPlayer.location,
+            inventory: [],
+            questStates: [],
+            gameHistory: [response1]
+          }
+        }),
+      });
+      const response2 = await res2.json();
+
+      expect(response2.story).toMatch(/crystal/i);
+    }, 30000);  // 30 second timeout
+  });
+
+  /**
+   * Game State Management endpoint tests
+   */
+  describe('Game State Management', () => {
+    const testPlayer = {
+      id: 'player-1',
+      name: 'TestHero',
+      class: 'Warrior',
+      level: 5
+    };
+
+    it('should save game state', async () => {
+      const res = await fetch(`${API_URL}/game/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: testPlayer.id,
+          state: {
+            currentScene: 'Dark Forest Entrance',
+            activeEffects: [{ type: 'buff', name: 'courage', duration: 3 }],
+            temporaryFlags: { discoveredCave: true },
+            lastAction: 'Explored the forest path',
+            lastResponse: 'You find a hidden cave entrance'
+          }
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const response = await res.json();
+      expect(response).toHaveProperty('success', true);
+    });
+
+    it('should retrieve game state', async () => {
+      const res = await fetch(`${API_URL}/game/state/${testPlayer.id}`);
+      expect(res.status).toBe(200);
+      const state = await res.json();
+      expect(state).toHaveProperty('currentScene');
+      expect(state).toHaveProperty('activeEffects');
+      expect(state).toHaveProperty('temporaryFlags');
+      expect(state).toHaveProperty('lastAction');
+      expect(state).toHaveProperty('lastResponse');
+    });
+  });
+
+  /**
+   * Memory/History Management endpoint tests
+   */
+  describe('Memory Management', () => {
+    const testPlayer = {
+      id: 'player-1',
+      name: 'TestHero',
+      class: 'Warrior',
+      level: 5,
+      location: 'Dark Forest'
+    };
+
+    const testMemory = {
+      type: 'event',
+      content: 'Found a mysterious glowing crystal in the Dark Forest',
+      location: 'Dark Forest',
+      timestamp: new Date(),
+      metadata: {
+        importance: 0.8,
+        tags: ['item', 'discovery']
+      }
+    };
+
+    // Helper function to store test memories
+    const storeTestMemories = async () => {
+      const memories = [
+        {
+          ...testMemory,
+          content: 'Found a mysterious glowing crystal in the Dark Forest',
+          importance: 0.8
+        },
+        {
+          ...testMemory,
+          content: 'Encountered a friendly merchant on the road',
+          location: 'Forest Road',
+          importance: 0.5
+        },
+        {
+          ...testMemory,
+          content: 'Defeated a pack of wolves near the cave',
+          location: 'Cave Entrance',
+          importance: 0.7
+        }
+      ];
+
+      for (const memory of memories) {
+        await fetch(`${API_URL}/game/memory`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            playerId: testPlayer.id,
+            entry: memory
+          })
+        });
+      }
+    };
+
+    beforeEach(async () => {
+      await storeTestMemories();
+    });
+
+    it('should store memory entry', async () => {
+      const res = await fetch(`${API_URL}/game/memory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: testPlayer.id,
+          entry: testMemory
+        })
+      });
+
+      expect(res.status).toBe(200);
+      const response = await res.json();
+      expect(response).toHaveProperty('success', true);
+      expect(response).toHaveProperty('memoryId');
+    });
+
+    it('should retrieve relevant memories for context', async () => {
+      const res = await fetch(`${API_URL}/game/memory/context`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: testPlayer.id,
+          location: 'Dark Forest',
+          action: 'I look around for more crystals',
+          limit: 2
+        })
+      });
+
+      expect(res.status).toBe(200);
+      const memories = await res.json();
+      expect(memories).toBeInstanceOf(Array);
+      expect(memories.length).toBeGreaterThan(0);
+      expect(memories[0]).toHaveProperty('content');
+      expect(memories[0]).toHaveProperty('importance');
+      expect(memories[0].content).toMatch(/crystal/i);
+    });
+
+    it('should handle memory importance scoring', async () => {
+      const res = await fetch(`${API_URL}/game/memory/context`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: testPlayer.id,
+          location: 'Dark Forest',
+          action: 'I search the area',
+          limit: 2
+        })
+      });
+
+      expect(res.status).toBe(200);
+      const topMemories = await res.json();
+      expect(topMemories).toHaveLength(2);
+      // Should return the two most important memories
+      expect(topMemories[0].importance).toBeGreaterThanOrEqual(topMemories[1].importance);
     });
   });
 }); 
