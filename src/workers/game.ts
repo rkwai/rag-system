@@ -39,11 +39,10 @@ class GameWorker {
       };
 
       // Generate response with a shorter timeout
-      const response = await env.AI.run('mistral', {
+      const response = await env.AI.run('@cf/mistral/mistral-7b-instruct-v0.1', {
         messages: [prompt, userPrompt],
         max_tokens: 150,  // Limit response length
-        temperature: 0.7,
-        model: '@cf/mistral/mistral-7b-instruct-v0.1'
+        temperature: 0.7
       });
 
       if (!response?.response) {
@@ -82,11 +81,10 @@ class GameWorker {
         content: `Action: ${action.action}\nResponse: ${response}`
       };
 
-      const effectsResponse = await env.AI.run('mistral', {
+      const effectsResponse = await env.AI.run('@cf/mistral/mistral-7b-instruct-v0.1', {
         messages: [prompt, userPrompt],
         max_tokens: 100,
-        temperature: 0.3,
-        model: '@cf/mistral/mistral-7b-instruct-v0.1'
+        temperature: 0.3
       });
 
       try {
@@ -110,9 +108,8 @@ class GameWorker {
       const { playerId, location, action, limit = 5 } = memoryRequest;
 
       // Generate embedding for the current action
-      const response = await env.AI.run('embedding', {
+      const response = await env.AI.run('@cf/baai/bge-large-en-v1.5', {
         text: `${location} ${action}`,
-        model: '@cf/baai/bge-base-en-v1.5',
         dimensions: 768
       });
 
@@ -122,8 +119,8 @@ class GameWorker {
       }
 
       // Query vectorize for similar memories
-      const memories = await env.VECTORIZE.query('memories', {
-        vector: response.embedding,
+      const memories = await env.MEMORIES_VECTORSTORE.query({
+        values: response.embedding,
         topK: limit
       });
 
@@ -138,7 +135,7 @@ class GameWorker {
         content: memory.metadata.content,
         timestamp: new Date(memory.metadata.timestamp),
         location: memory.metadata.location,
-        importance: memory.score,
+        importance: memory.metadata.importance,
         metadata: memory.metadata.metadata
       }));
     } catch (error) {
@@ -271,9 +268,8 @@ class GameWorker {
           const memoryId = nanoid();
           
           // Generate embedding for the memory
-          const embeddingResponse = await env.AI.run('embedding', {
+          const embeddingResponse = await env.AI.run('@cf/baai/bge-large-en-v1.5', {
             text: `${entry.location} ${entry.content}`,
-            model: '@cf/baai/bge-base-en-v1.5',
             dimensions: 768
           });
 
@@ -287,16 +283,33 @@ class GameWorker {
           }
 
           // Store in vectorize for semantic search
-          await env.VECTORIZE.insert('memories', {
+          await env.MEMORIES_VECTORSTORE.insert([{
             id: memoryId,
+            values: embeddingResponse.embedding,
             metadata: {
               ...entry,
               id: memoryId,
               playerId,
               timestamp: entry.timestamp.toISOString()  // Ensure timestamp is string
-            },
-            vector: embeddingResponse.embedding
-          });
+            }
+          }]);
+
+          // Store in D1 database
+          await env.DB.prepare(`
+            INSERT INTO memories (
+              id, player_id, type, content, location, importance, metadata, embedding, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            memoryId,
+            playerId,
+            entry.type,
+            entry.content,
+            entry.location,
+            entry.importance || 0.5,
+            JSON.stringify(entry.metadata || {}),
+            JSON.stringify(embeddingResponse.embedding),
+            entry.timestamp.toISOString()
+          ).run();
 
           return new Response(JSON.stringify({ 
             success: true,

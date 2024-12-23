@@ -5,6 +5,9 @@ async function generateEmbedding(text: string, env: Env): Promise<Float32Array> 
     text: text,
     type: 'query'  // Note: Use 'query' type for queries
   });
+  if (!response.data?.[0]) {
+    throw new Error('Invalid embedding response');
+  }
   const valuesIterable = response.data[0].values();
   const values = Array.from(valuesIterable) as number[];
   return Float32Array.from(values);
@@ -49,7 +52,7 @@ async function generateResponse(matches: any[], query: string, env: Env) {
     return "No relevant context found for the query.";
   }
 
-  const response = await env.AI.run('@cf/meta/llama-2-7b-chat-int8', {
+  const response = await env.AI.run('@cf/mistral/mistral-7b-instruct-v0.1', {
     messages: [
       {
         role: 'system',

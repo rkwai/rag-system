@@ -6,6 +6,10 @@ export interface Env {
     run(model: string, options: AIInput): Promise<AIResponse>;
   };
   VECTORSTORE: VectorizeIndex;
+  MEMORIES_VECTORSTORE: {
+    query(input: { values: number[], topK?: number }): Promise<Array<{ id: string, values: number[], metadata: any }>>;
+    insert(vectors: { id: string, values: number[], metadata: any }[]): Promise<void>;
+  };
   VECTORIZE: {
     insert(collection: string, data: VectorizeInsert): Promise<void>;
     query(collection: string, query: VectorizeQuery): Promise<VectorizeResult[]>;
@@ -27,11 +31,15 @@ export interface AIInput {
   max_tokens?: number;
   temperature?: number;
   stream?: boolean;
+  type?: 'query' | 'passage';
 }
 
 export interface AIResponse {
   response?: string;
   embedding?: number[];
+  data?: Array<{
+    values(): Iterable<number>;
+  }>;
 }
 
 export interface VectorizeInsert {

@@ -20,6 +20,10 @@ preview_database_id = "90bd0b74-bf3d-42a8-b663-0e652307a376"
 binding = "VECTORSTORE"
 index_name = "rag_system"
 
+[[env.production.vectorize]]
+binding = "MEMORIES_VECTORSTORE"
+index_name = "memories"
+
 [[env.production.kv_namespaces]]
 binding = "CACHE"
 id = "74915c4a86544541b03eac27e0d97214"
@@ -49,6 +53,10 @@ preview_database_id = "90bd0b74-bf3d-42a8-b663-0e652307a376"
 [[env.development.vectorize]]
 binding = "VECTORSTORE"
 index_name = "rag_system_preview"
+
+[[env.development.vectorize]]
+binding = "MEMORIES_VECTORSTORE"
+index_name = "memories_preview"
 
 [[env.development.kv_namespaces]]
 binding = "CACHE"

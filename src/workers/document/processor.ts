@@ -6,6 +6,9 @@ async function generateEmbedding(text: string, env: Env): Promise<Float32Array> 
     text: text,
     type: 'passage'
   });
+  if (!response.data?.[0]) {
+    throw new Error('Invalid embedding response');
+  }
   const valuesIterable = response.data[0].values();
   const values = Array.from(valuesIterable) as number[];
   return Float32Array.from(values);
