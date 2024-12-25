@@ -9,6 +9,7 @@ from rich.prompt import Prompt, IntPrompt
 from rich.table import Table
 import typer
 from enum import Enum
+from datetime import datetime
 
 # Initialize Rich console for better output
 console = Console()
@@ -27,22 +28,23 @@ class PlayerClass(str, Enum):
     CLERIC = "Cleric"
     RANGER = "Ranger"
 
-class QuestDifficulty(str, Enum):
-    EASY = "easy"
-    MEDIUM = "medium"
-    HARD = "hard"
-    EPIC = "epic"
+@dataclass
+class GameState:
+    current_scene: str
+    active_effects: List[Dict]
+    temporary_flags: Dict
+    last_action: str
+    last_response: str
 
 @dataclass
 class RPGClient:
     base_url: str = "http://localhost:8787"
-    token: Optional[str] = None
     player_id: Optional[str] = None
+    game_history: List[Dict] = None
 
     def __post_init__(self):
         self.session = requests.Session()
-        if self.token:
-            self.session.headers.update({"Authorization": f"Bearer {self.token}"})
+        self.game_history = []
 
     def _request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict:
         url = f"{self.base_url}{endpoint}"
@@ -56,7 +58,7 @@ class RPGClient:
             if hasattr(e, 'response') and e.response is not None and e.response.content:
                 try:
                     error_data = e.response.json()
-                    console.print(f"[red]API Error: {error_data.get('error', {}).get('message', 'Unknown error')}[/red]")
+                    console.print(f"[red]API Error: {error_data.get('error', 'Unknown error')}[/red]")
                 except:
                     console.print(f"[red]Response: {e.response.content.decode()}[/red]")
             return {}
@@ -78,22 +80,78 @@ class RPGClient:
     def update_location(self, location: str) -> Dict:
         return self._request("PUT", f"/players/{self.player_id}/location", {"location": location})
 
-    def get_quest(self, difficulty: QuestDifficulty = QuestDifficulty.MEDIUM) -> Dict:
+    def add_experience(self, amount: int, source: str) -> Dict:
+        return self._request("POST", f"/players/{self.player_id}/experience", {
+            "amount": amount,
+            "source": source
+        })
+
+    def perform_action(self, action: str) -> Dict:
         player = self.get_player_details()
         if not player:
             return {}
-        
+
         data = {
-            "player": {
-                "id": self.player_id,
-                "level": player.get("level", 1),
-                "class": player.get("class"),
-                "location": player.get("location")
-            },
-            "difficulty": difficulty,
-            "useHistory": True
+            "playerId": self.player_id,
+            "action": action,
+            "context": {
+                "currentLocation": player.get("location", "Unknown"),
+                "inventory": player.get("inventory", {}).get("items", []),
+                "questStates": [],  # TODO: Implement quest state tracking
+                "gameHistory": self.game_history[-5:]  # Keep last 5 actions for context
+            }
         }
-        return self._request("POST", "/quests", data)
+        
+        response = self._request("POST", "/game/action", data)
+        if response:
+            self.game_history.append({
+                "action": action,
+                "story": response.get("story", ""),
+                "effects": response.get("effects", [])
+            })
+            self._store_memory(action, response)
+        return response
+
+    def _store_memory(self, action: str, response: Dict) -> None:
+        player = self.get_player_details()
+        if not player:
+            return
+
+        memory_data = {
+            "playerId": self.player_id,
+            "entry": {
+                "type": "action",
+                "content": f"{action} -> {response.get('story', '')}",
+                "location": player.get("location", "Unknown"),
+                "timestamp": datetime.now().isoformat(),
+                "importance": 0.7,  # Default importance for actions
+                "metadata": {
+                    "effects": response.get("effects", []),
+                    "type": "player_action"
+                }
+            }
+        }
+        self._request("POST", "/game/memory", memory_data)
+
+    def save_game_state(self) -> Dict:
+        if not self.game_history:
+            return {}
+
+        last_action = self.game_history[-1]
+        state = {
+            "playerId": self.player_id,
+            "state": {
+                "currentScene": self.get_player_details().get("location", "Unknown"),
+                "activeEffects": [],  # TODO: Track active effects
+                "temporaryFlags": {},  # TODO: Track temporary flags
+                "lastAction": last_action["action"],
+                "lastResponse": last_action["story"]
+            }
+        }
+        return self._request("POST", "/game/state", state)
+
+    def load_game_state(self) -> Dict:
+        return self._request("GET", f"/game/state/{self.player_id}")
 
 def display_player_info(player_data: Dict):
     if not player_data:
@@ -124,16 +182,19 @@ def display_player_info(player_data: Dict):
             )
         console.print(table)
 
-def format_quest_display(quest_data: Dict) -> str:
-    objectives = "\n".join(f"- {obj.get('description')}" for obj in quest_data.get('objectives', []))
-    rewards = "\n".join(f"- {reward.get('type')}: {reward.get('amount')}" for reward in quest_data.get('rewards', []))
+def display_story_response(response: Dict):
+    if not response:
+        return
+
+    story = response.get("story", "")
+    effects = response.get("effects", [])
+
+    console.print(Panel(f"[bold yellow]{story}[/bold yellow]"))
     
-    return (
-        f"[bold]Quest: [/bold]{quest_data.get('title')}\n"
-        f"[bold]Description: [/bold]{quest_data.get('description')}\n\n"
-        f"[bold]Objectives:[/bold]\n{objectives}\n\n"
-        f"[bold]Rewards:[/bold]\n{rewards}"
-    )
+    if effects:
+        console.print("\n[bold cyan]Effects:[/bold cyan]")
+        for effect in effects:
+            console.print(f"- {effect.get('type')}: {effect.get('data')}")
 
 def main():
     app = typer.Typer()
@@ -142,16 +203,19 @@ def main():
     @app.command()
     def start():
         """Start a new game or continue existing game"""
-        token = Prompt.ask("Enter your player token (leave empty for new player)")
+        player_id = Prompt.ask("Enter your player ID (leave empty for new player)")
         
-        if token:
-            client.token = token
-            player_id = Prompt.ask("Enter your player ID")
+        if player_id:
             client.player_id = player_id
             player_data = client.get_player_details()
             if player_data:
                 console.print("[green]Successfully loaded player![/green]")
                 display_player_info(player_data)
+                
+                # Load game state
+                state = client.load_game_state()
+                if state:
+                    console.print("[green]Loaded previous game state[/green]")
             else:
                 console.print("[red]Failed to load player data[/red]")
                 return
@@ -178,27 +242,29 @@ def main():
         while True:
             action = Prompt.ask(
                 "\nWhat would you like to do?",
-                choices=["status", "quest", "move", "quit"]
+                choices=["act", "status", "move", "save", "quit"]
             )
 
             if action == "quit":
+                # Save game state before quitting
+                client.save_game_state()
                 break
             elif action == "status":
                 display_player_info(client.get_player_details())
-            elif action == "quest":
-                difficulty = Prompt.ask(
-                    "Choose quest difficulty",
-                    choices=[d.value for d in QuestDifficulty]
-                )
-                quest_data = client.get_quest(difficulty)
-                if quest_data:
-                    console.print(Panel(format_quest_display(quest_data)))
+            elif action == "act":
+                player_action = Prompt.ask("What would you like to do? (describe your action)")
+                response = client.perform_action(player_action)
+                if response:
+                    display_story_response(response)
             elif action == "move":
                 new_location = Prompt.ask("Enter new location")
                 result = client.update_location(new_location)
                 if result:
                     console.print(f"[green]Moved to {new_location}[/green]")
                     display_player_info(result)
+            elif action == "save":
+                if client.save_game_state():
+                    console.print("[green]Game state saved![/green]")
 
     app()
 

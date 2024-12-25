@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Ensure we're in the right directory
-cd "$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # Check if uv is installed
 if ! command -v uv &> /dev/null; then
@@ -15,11 +16,24 @@ if [ ! -d ".venv" ]; then
     uv venv
 fi
 
+# Ensure the activate script exists
+if [ ! -f ".venv/bin/activate" ]; then
+    echo "Error: Virtual environment activation script not found"
+    exit 1
+fi
+
 # Activate virtual environment
-source .venv/bin/activate
+echo "Activating virtual environment..."
+. .venv/bin/activate
+
+# Verify activation
+if [ -z "$VIRTUAL_ENV" ]; then
+    echo "Error: Virtual environment not activated"
+    exit 1
+fi
 
 # Install dependencies
 echo "Installing dependencies..."
 uv pip install -r requirements.txt
 
-echo "Setup complete! You can now run: python rpg_client.py start" 
+echo "Setup complete! You can now run: source .venv/bin/activate && python rpg_client.py" 
