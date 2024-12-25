@@ -10,6 +10,15 @@ name = "edge-rag-system"
 [env.production.ai]
 binding = "AI"
 
+# Enable specific AI models
+[[env.production.ai.models]]
+name = "@cf/baai/bge-base-en-v1.5"
+enabled = true
+
+[[env.production.ai.models]]
+name = "@cf/mistral/mistral-7b-instruct-v0.1"
+enabled = true
+
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "rag_system"
@@ -43,6 +52,15 @@ name = "edge-rag-system-dev"
 
 [env.development.ai]
 binding = "AI"
+
+# Enable specific AI models
+[[env.development.ai.models]]
+name = "@cf/baai/bge-base-en-v1.5"
+enabled = true
+
+[[env.development.ai.models]]
+name = "@cf/mistral/mistral-7b-instruct-v0.1"
+enabled = true
 
 [[env.development.d1_databases]]
 binding = "DB"

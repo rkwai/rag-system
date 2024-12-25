@@ -7,8 +7,33 @@ import {
   GameMemoryEntry,
   MemoryContextRequest
 } from '../types/game';
-import { Env, AIResponse } from '../types/env';
+import { Env } from '../types/env';
 import { nanoid } from 'nanoid';
+import type { VectorizeVector } from '@cloudflare/workers-types';
+
+interface AIEmbeddingResponse {
+  data: number[][];
+}
+
+interface AITextResponse {
+  response: string;
+}
+
+interface VectorizeQueryResult {
+  matches: Array<{
+    id: string;
+    score: number;
+    metadata?: {
+      playerId?: string;
+      type?: string;
+      content?: string;
+      timestamp?: string;
+      location?: string;
+      importance?: string;
+      metadata?: string;
+    };
+  }>;
+}
 
 class GameWorker {
   private async generateStoryResponse(
@@ -43,7 +68,7 @@ class GameWorker {
         messages: [prompt, userPrompt],
         max_tokens: 150,  // Limit response length
         temperature: 0.7
-      });
+      }) as AITextResponse;
 
       if (!response?.response) {
         throw new Error('Failed to generate story response');
@@ -85,7 +110,7 @@ class GameWorker {
         messages: [prompt, userPrompt],
         max_tokens: 100,
         temperature: 0.3
-      });
+      }) as AITextResponse;
 
       try {
         if (!effectsResponse?.response) return [];
@@ -100,6 +125,19 @@ class GameWorker {
     }
   }
 
+  private createVectorMetadata(entry: Omit<GameMemoryEntry, 'id'>, playerId: string, memoryId: string): Record<string, string> {
+    // Ensure all values are strings and properly formatted
+    return {
+      playerId: String(playerId),
+      type: String(entry.type),
+      content: String(entry.content),
+      location: String(entry.location),
+      timestamp: (entry.timestamp instanceof Date ? entry.timestamp : new Date(entry.timestamp)).toISOString(),
+      importance: String(entry.importance || 0.5),
+      metadata: JSON.stringify(entry.metadata || {})
+    };
+  }
+
   private async retrieveRelevantMemories(
     memoryRequest: MemoryContextRequest,
     env: Env
@@ -107,37 +145,90 @@ class GameWorker {
     try {
       const { playerId, location, action, limit = 5 } = memoryRequest;
 
+      // First try to get all memories for the player from D1
+      const dbMemories = await env.DB.prepare(`
+        SELECT * FROM memories WHERE player_id = ? ORDER BY importance DESC LIMIT ?
+      `).bind(playerId, limit).all();
+
+      const mapDbToMemory = (m: any): GameMemoryEntry => ({
+        id: String(m.id),
+        playerId: String(m.player_id),
+        type: String(m.type),
+        content: String(m.content),
+        timestamp: new Date(String(m.timestamp)),
+        location: String(m.location),
+        importance: Number(m.importance),
+        metadata: typeof m.metadata === 'string' ? JSON.parse(m.metadata) : {}
+      });
+
       // Generate embedding for the current action
-      const response = await env.AI.run('@cf/baai/bge-large-en-v1.5', {
-        text: `${location} ${action}`,
-        dimensions: 768
-      });
+      const text = `${location} ${action}`;
+      const embeddingResponse = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+        text: text
+      }) as AIEmbeddingResponse;
 
-      if (!response?.embedding) {
-        console.warn('Failed to generate embedding for memory retrieval');
+      if (!embeddingResponse?.data?.[0]) {
+        console.warn('Failed to generate embedding');
+        // Return importance-sorted memories from D1 as fallback
+        return (dbMemories.results || [])
+          .map(mapDbToMemory)
+          .sort((a, b) => b.importance - a.importance)
+          .slice(0, limit);
+      }
+
+      const embedding = Array.from(embeddingResponse.data[0]);
+      if (!Array.isArray(embedding) || embedding.length !== 768) {
+        console.error('Invalid embedding format');
         return [];
       }
 
-      // Query vectorize for similar memories
-      const memories = await env.MEMORIES_VECTORSTORE.query({
-        values: response.embedding,
-        topK: limit
-      });
+      // Query vectorize for similar memories with a larger topK
+      const results = await env.MEMORIES_VECTORSTORE.query(embedding, {
+        topK: Math.max(limit * 3, 20), // Get more results for better filtering
+      }) as VectorizeQueryResult;
 
-      if (!memories?.length) {
-        return [];
+      if (!results?.matches?.length) {
+        console.warn('No matching memories found in vector store, falling back to D1 results');
+        // Return importance-sorted memories from D1 as fallback
+        return (dbMemories.results || [])
+          .map(mapDbToMemory)
+          .sort((a, b) => b.importance - a.importance)
+          .slice(0, limit);
       }
 
-      return memories.map(memory => ({
-        id: memory.id,
-        playerId: memory.metadata.playerId,
-        type: memory.metadata.type,
-        content: memory.metadata.content,
-        timestamp: new Date(memory.metadata.timestamp),
-        location: memory.metadata.location,
-        importance: memory.metadata.importance,
-        metadata: memory.metadata.metadata
-      }));
+      // Process and filter results
+      const memories = results.matches
+        .filter(match => {
+          const hasMetadata = !!match.metadata;
+          const matchPlayerId = match.metadata?.playerId;
+          return hasMetadata && String(matchPlayerId) === String(playerId);
+        })
+        .map(match => {
+          const metadata = match.metadata!;
+          return {
+            id: String(match.id),
+            playerId: String(metadata.playerId),
+            type: String(metadata.type),
+            content: String(metadata.content),
+            timestamp: new Date(String(metadata.timestamp)),
+            location: String(metadata.location),
+            importance: Number(metadata.importance),
+            metadata: metadata.metadata ? JSON.parse(String(metadata.metadata)) : {},
+            score: match.score || 0
+          };
+        })
+        .sort((a, b) => {
+          // Sort by combination of vector similarity score and importance
+          const scoreA = (a.score || 0) * (a.importance || 0.5);
+          const scoreB = (b.score || 0) * (b.importance || 0.5);
+          return scoreB - scoreA;
+        })
+        .slice(0, limit); // Take only the requested number of memories
+
+      return memories.length > 0 ? memories : (dbMemories.results || [])
+        .map(mapDbToMemory)
+        .sort((a, b) => b.importance - a.importance)
+        .slice(0, limit);
     } catch (error) {
       console.error('Failed to retrieve memories:', error);
       return [];
@@ -190,7 +281,6 @@ class GameWorker {
             state: GameState 
           } = await request.json();
 
-          // Store in KV
           await env.CACHE.put(
             `gameState:${playerId}`, 
             JSON.stringify({
@@ -199,9 +289,7 @@ class GameWorker {
             })
           );
 
-          return new Response(JSON.stringify({ 
-            success: true 
-          }), {
+          return new Response(JSON.stringify({ success: true }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           });
@@ -268,31 +356,47 @@ class GameWorker {
           const memoryId = nanoid();
           
           // Generate embedding for the memory
-          const embeddingResponse = await env.AI.run('@cf/baai/bge-large-en-v1.5', {
-            text: `${entry.location} ${entry.content}`,
-            dimensions: 768
-          });
+          const text = `${entry.location} ${entry.content}`;
+          const embeddingResponse = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+            text: text
+          }) as AIEmbeddingResponse;
 
-          if (!embeddingResponse?.embedding) {
+          if (!embeddingResponse?.data?.[0]) {
+            console.error('Failed to generate embedding');
             return new Response(JSON.stringify({ 
-              error: 'Failed to generate embedding' 
+              error: 'Failed to generate embedding'
             }), { 
               status: 500,
               headers: { 'Content-Type': 'application/json' }
             });
           }
 
-          // Store in vectorize for semantic search
-          await env.MEMORIES_VECTORSTORE.insert([{
+          const embedding = Array.from(embeddingResponse.data[0]);
+          
+          // First verify player exists
+          const player = await env.DB.prepare(
+            'SELECT id FROM players WHERE id = ?'
+          ).bind(playerId).first();
+
+          if (!player) {
+            console.error('Player not found:', playerId);
+            return new Response(JSON.stringify({ 
+              error: 'Player not found'
+            }), { 
+              status: 404,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Store in vectorize
+          const metadata = this.createVectorMetadata(entry, playerId, memoryId);
+          const vectorData: VectorizeVector = {
             id: memoryId,
-            values: embeddingResponse.embedding,
-            metadata: {
-              ...entry,
-              id: memoryId,
-              playerId,
-              timestamp: entry.timestamp.toISOString()  // Ensure timestamp is string
-            }
-          }]);
+            values: embedding,
+            metadata
+          };
+
+          await env.MEMORIES_VECTORSTORE.insert([vectorData]);
 
           // Store in D1 database
           await env.DB.prepare(`
@@ -307,9 +411,19 @@ class GameWorker {
             entry.location,
             entry.importance || 0.5,
             JSON.stringify(entry.metadata || {}),
-            JSON.stringify(embeddingResponse.embedding),
-            entry.timestamp.toISOString()
+            JSON.stringify(embedding),
+            (entry.timestamp instanceof Date ? entry.timestamp : new Date(entry.timestamp)).toISOString()
           ).run();
+
+          // Verify the memory was stored by trying to retrieve it
+          const results = await env.MEMORIES_VECTORSTORE.query(embedding, {
+            topK: 1,
+            filter: { playerId }
+          }) as VectorizeQueryResult;
+
+          if (!results?.matches?.length) {
+            console.warn('Memory stored but not immediately retrievable');
+          }
 
           return new Response(JSON.stringify({ 
             success: true,

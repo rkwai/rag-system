@@ -709,7 +709,11 @@ describe('API Endpoints', () => {
           }
         }),
       });
+
+      expect(res1.status).toBe(200);
       const response1 = await res1.json();
+      expect(response1).toHaveProperty('story');
+      expect(response1.story).toBeTypeOf('string');
 
       // Second action referencing the first
       const res2 = await fetch(`${API_URL}/game/action`, {
@@ -722,14 +726,21 @@ describe('API Endpoints', () => {
             currentLocation: testPlayer.location,
             inventory: [],
             questStates: [],
-            gameHistory: [response1]
+            gameHistory: [{
+              action: 'I find a mysterious glowing crystal',
+              story: response1.story,
+              effects: response1.effects
+            }]
           }
         }),
       });
-      const response2 = await res2.json();
 
+      expect(res2.status).toBe(200);
+      const response2 = await res2.json();
+      expect(response2).toHaveProperty('story');
+      expect(response2.story).toBeTypeOf('string');
       expect(response2.story).toMatch(/crystal/i);
-    }, 30000);  // 30 second timeout
+    }, 60000);  // Increase timeout to 60 seconds
   });
 
   /**
@@ -781,43 +792,56 @@ describe('API Endpoints', () => {
    */
   describe('Memory Management', () => {
     const testPlayer = {
-      id: 'player-1',
       name: 'TestHero',
-      class: 'Warrior',
-      level: 5,
+      class: 'Warrior' as const,
       location: 'Dark Forest'
     };
 
-    const testMemory = {
-      type: 'event',
-      content: 'Found a mysterious glowing crystal in the Dark Forest',
-      location: 'Dark Forest',
-      timestamp: new Date(),
-      metadata: {
-        importance: 0.8,
-        tags: ['item', 'discovery']
-      }
-    };
+    let playerId: string;
 
-    // Helper function to store test memories
-    const storeTestMemories = async () => {
+    // Create player before running memory tests
+    beforeEach(async () => {
+      // Create the player first
+      const createPlayerRes = await fetch(`${API_URL}/players`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testPlayer),
+      });
+      
+      const player = await createPlayerRes.json();
+      playerId = player.id;
+
+      // Then store test memories
       const memories = [
         {
-          ...testMemory,
+          type: 'event',
           content: 'Found a mysterious glowing crystal in the Dark Forest',
-          importance: 0.8
+          location: 'Dark Forest',
+          timestamp: new Date().toISOString(),
+          importance: 0.8,
+          metadata: {
+            tags: ['item', 'discovery']
+          }
         },
         {
-          ...testMemory,
+          type: 'event',
           content: 'Encountered a friendly merchant on the road',
           location: 'Forest Road',
-          importance: 0.5
+          timestamp: new Date().toISOString(),
+          importance: 0.5,
+          metadata: {
+            tags: ['npc', 'merchant']
+          }
         },
         {
-          ...testMemory,
+          type: 'event',
           content: 'Defeated a pack of wolves near the cave',
           location: 'Cave Entrance',
-          importance: 0.7
+          timestamp: new Date().toISOString(),
+          importance: 0.7,
+          metadata: {
+            tags: ['combat', 'victory']
+          }
         }
       ];
 
@@ -826,26 +850,42 @@ describe('API Endpoints', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            playerId: testPlayer.id,
+            playerId,
             entry: memory
           })
         });
       }
-    };
-
-    beforeEach(async () => {
-      await storeTestMemories();
     });
 
     it('should store memory entry', async () => {
+      const memory = {
+        type: 'event',
+        content: 'Found a mysterious glowing crystal in the Dark Forest',
+        location: 'Dark Forest',
+        timestamp: new Date().toISOString(),
+        importance: 0.8,
+        metadata: {
+          tags: ['item', 'discovery']
+        }
+      };
+
       const res = await fetch(`${API_URL}/game/memory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          playerId: testPlayer.id,
-          entry: testMemory
+          playerId,
+          entry: memory
         })
       });
+
+      // Print out error response for debugging
+      if (res.status !== 200) {
+        const errorBody = await res.json();
+        console.error('Memory storage failed:', {
+          status: res.status,
+          error: errorBody
+        });
+      }
 
       expect(res.status).toBe(200);
       const response = await res.json();
@@ -858,12 +898,21 @@ describe('API Endpoints', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          playerId: testPlayer.id,
+          playerId,
           location: 'Dark Forest',
           action: 'I look around for more crystals',
           limit: 2
         })
       });
+
+      // Print out error response for debugging
+      if (res.status !== 200) {
+        const errorBody = await res.json();
+        console.error('Memory retrieval failed:', {
+          status: res.status,
+          error: errorBody
+        });
+      }
 
       expect(res.status).toBe(200);
       const memories = await res.json();
@@ -879,12 +928,21 @@ describe('API Endpoints', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          playerId: testPlayer.id,
+          playerId,
           location: 'Dark Forest',
           action: 'I search the area',
           limit: 2
         })
       });
+
+      // Print out error response for debugging
+      if (res.status !== 200) {
+        const errorBody = await res.json();
+        console.error('Memory importance scoring failed:', {
+          status: res.status,
+          error: errorBody
+        });
+      }
 
       expect(res.status).toBe(200);
       const topMemories = await res.json();

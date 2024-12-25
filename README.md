@@ -4,22 +4,24 @@ An AI-powered role-playing game where stories, items, and quests are dynamically
 
 ## Features
 
-- Dynamic story generation using Mixtral 8x7B
-- Persistent game state with memory of items and quests
+- Dynamic story generation using Mixtral 7B Instruct
+- Contextual memory system using vector embeddings
+- Persistent game state with memory of past actions, items, and quests
 - Edge-first architecture using Cloudflare Workers
 - Vector search with Cloudflare Vectorize for memory retrieval
-- Document embedding with BGE-large-en-v1.5
-- Game state storage with D1 (SQL) and R2 (objects)
-- Performance optimization with KV caching
+- Document embedding with BGE-base-en-v1.5
+- Game state storage with D1 (SQL) and KV (cache)
+- Performance optimization with memory importance scoring
 
-## Gameplay mechanics
+## Gameplay Mechanics
 
-- Player actions trigger story generation
-- Player mainly chats with the game master
-- Game master generates stories and updates game state based on player actions
-- Player can explore, collect items, and complete quests
-- Game state is stored in D1 and R2 for persistence
-- Player can view game state and continue story
+- Natural language interaction with the game master
+- Contextual story generation based on player's history
+- Automatic game effect detection from story responses
+- Dynamic quest generation based on player state
+- Inventory and item management system
+- Location-based memory retrieval
+- Experience and leveling system
 
 ## Setup
 
@@ -33,15 +35,16 @@ npm install
 wrangler login
 ```
 
-3. Start development (uses remote infrastructure):
+3. Create required Cloudflare resources:
 ```bash
-npm run dev
+npm run setup
 ```
 
-## Deployment
+4. Update wrangler.toml with the created resource IDs
 
+5. Start development:
 ```bash
-npm run deploy
+npm run dev
 ```
 
 ## Testing
@@ -50,17 +53,26 @@ npm run deploy
 npm test
 ```
 
-## Architecture
-
-See `spec.md` for detailed technical architecture documentation.
+Tests cover:
+- API endpoints functionality
+- Game action processing
+- Memory management
+- Quest generation
+- Player management
+- Item management
+- Game state persistence
 
 ## System Requirements
 
 - Node.js 18+
 - Cloudflare account with:
-  - Workers AI access
-  - D1 database
-  - R2 storage
-  - KV namespace
-  - Vectorize instance
+  - Workers AI access (for Mixtral and BGE models)
+  - D1 database (for game state)
+  - KV namespace (for caching)
+  - Vectorize instance (for memory search)
+
+## Architecture
+
+See `spec.md` for detailed technical architecture documentation.
+See `API.md` for API endpoint documentation.
   

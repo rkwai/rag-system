@@ -2,16 +2,104 @@
 
 ## Base URL
 ```
-https://rpg-game.workers.dev/api/v1
-```
-
-## Authentication
-All requests require a Bearer token in the Authorization header:
-```
-Authorization: Bearer <player_token>
+https://rpg-game.workers.dev
 ```
 
 ## Endpoints
+
+### Game Actions
+
+#### Process Game Action
+```http
+POST /game/action
+Content-Type: application/json
+
+{
+  "playerId": string,
+  "action": string,
+  "context": {
+    "currentLocation": string,
+    "inventory": InventoryItem[],
+    "questStates": QuestState[],
+    "gameHistory": GameHistoryEntry[]
+  }
+}
+
+Response: {
+  "story": string,
+  "effects": GameEffect[]
+}
+```
+
+### Memory Management
+
+#### Store Memory
+```http
+POST /game/memory
+Content-Type: application/json
+
+{
+  "playerId": string,
+  "entry": {
+    "type": string,
+    "content": string,
+    "location": string,
+    "timestamp": string,
+    "importance": number,
+    "metadata": object
+  }
+}
+
+Response: {
+  "success": boolean,
+  "memoryId": string
+}
+```
+
+#### Retrieve Relevant Memories
+```http
+POST /game/memory/context
+Content-Type: application/json
+
+{
+  "playerId": string,
+  "location": string,
+  "action": string,
+  "limit": number
+}
+
+Response: GameMemoryEntry[]
+```
+
+### Game State Management
+
+#### Save Game State
+```http
+POST /game/state
+Content-Type: application/json
+
+{
+  "playerId": string,
+  "state": {
+    "currentScene": string,
+    "activeEffects": GameEffect[],
+    "temporaryFlags": object,
+    "lastAction": string,
+    "lastResponse": string
+  }
+}
+
+Response: {
+  "success": boolean
+}
+```
+
+#### Get Game State
+```http
+GET /game/state/{playerId}
+
+Response: GameState
+```
 
 ### Player Management
 
@@ -23,37 +111,22 @@ Content-Type: application/json
 {
   "name": string,
   "class": "Warrior" | "Mage" | "Rogue" | "Cleric" | "Ranger",
+  "location": string
+}
+
+Response: {
+  "id": string,
+  "name": string,
+  "class": string,
+  "level": number,
+  "experience": number,
+  "gold": number,
   "location": string,
-  "inventoryCapacity": number  // Optional, defaults to 20
-}
-
-Response: {
-  "id": string,
-  "name": string,
-  "class": string,
-  "level": number,
-  "experience": number,
-  "gold": number,
-  "inventory": Inventory,
-  "stats": PlayerStats,
-  "location": string
-}
-```
-
-#### Get Player Details
-```http
-GET /players/{playerId}
-
-Response: {
-  "id": string,
-  "name": string,
-  "class": string,
-  "level": number,
-  "experience": number,
-  "gold": number,
-  "inventory": Inventory,
-  "stats": PlayerStats,
-  "location": string
+  "inventory": {
+    "items": Record<string, { item: Item, quantity: number }>,
+    "capacity": number
+  },
+  "stats": PlayerStats
 }
 ```
 
@@ -66,7 +139,7 @@ Content-Type: application/json
   "location": string
 }
 
-Response: PlayerData
+Response: Player
 ```
 
 #### Add Experience
@@ -79,7 +152,7 @@ Content-Type: application/json
   "source": string
 }
 
-Response: PlayerData  // Includes updated level and stats if leveled up
+Response: Player
 ```
 
 ### Item Management
@@ -95,14 +168,13 @@ Content-Type: application/json
   "type": "weapon" | "armor" | "consumable" | "quest" | "key",
   "rarity": "common" | "uncommon" | "rare" | "epic" | "legendary",
   "properties": object,
-  "value": number,
-  "questRelated": boolean
+  "value": number
 }
 
 Response: Item
 ```
 
-#### Add Item to Inventory
+#### Manage Inventory
 ```http
 POST /players/{playerId}/inventory/add
 Content-Type: application/json
@@ -113,100 +185,8 @@ Content-Type: application/json
 }
 
 Response: {
-  "id": string,
+  "success": boolean,
   "inventory": Inventory
-}
-```
-
-#### Remove Item from Inventory
-```http
-POST /players/{playerId}/inventory/remove
-Content-Type: application/json
-
-{
-  "itemId": string,
-  "quantity": number
-}
-
-Response: {
-  "id": string,
-  "inventory": Inventory
-}
-```
-
-#### Get Items by Type
-```http
-GET /players/{playerId}/inventory/type/{itemType}
-
-Response: {
-  "items": [{
-    "item": Item,
-    "quantity": number
-  }]
-}
-```
-
-### Quest System
-
-#### Generate Quest
-```http
-POST /quests
-Content-Type: application/json
-
-{
-  "player": {
-    "id": string,
-    "level": number,
-    "class": string,
-    "location": string
-  },
-  "difficulty": "easy" | "medium" | "hard" | "epic",
-  "useHistory": boolean  // Optional
-}
-
-Response: {
-  "id": string,
-  "title": string,
-  "description": string,
-  "objectives": QuestObjective[],
-  "rewards": QuestReward[],
-  "requiredLevel": number,
-  "requiredClass": string,
-  "location": string,
-  "difficulty": string,
-  "status": string,
-  "assignedPlayer": string
-}
-```
-
-#### Update Quest Progress
-```http
-PUT /quests/{questId}/progress
-Content-Type: application/json
-
-{
-  "playerId": string,
-  "objectiveId": string,
-  "progress": number
-}
-
-Response: Quest  // Updated quest state
-```
-
-#### Record Quest History
-```http
-POST /quests/history
-Content-Type: application/json
-
-{
-  "questId": string,
-  "playerId": string,
-  "status": string,
-  "outcome": string
-}
-
-Response: {
-  "success": boolean
 }
 ```
 
@@ -214,6 +194,35 @@ Response: {
 
 ### Core Types
 ```typescript
+interface GameAction {
+  playerId: string;
+  action: string;
+  timestamp: string;
+}
+
+interface GameContext {
+  currentLocation: string;
+  inventory: InventoryItem[];
+  questStates: QuestState[];
+  gameHistory: GameHistoryEntry[];
+}
+
+interface GameMemoryEntry {
+  id: string;
+  playerId: string;
+  type: string;
+  content: string;
+  location: string;
+  timestamp: Date;
+  importance: number;
+  metadata: object;
+}
+
+interface GameEffect {
+  type: string;
+  data: object;
+}
+
 interface PlayerStats {
   health: number;
   mana: number;
@@ -223,58 +232,41 @@ interface PlayerStats {
   constitution: number;
 }
 
-interface Inventory {
-  items: {
-    [itemId: string]: {
-      item: Item;
-      quantity: number;
-    }
-  };
-  capacity: number;
-}
-
 interface Item {
   id: string;
   name: string;
   description: string;
-  type: "weapon" | "armor" | "consumable" | "quest" | "key";
-  rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
+  type: string;
+  rarity: string;
   properties: object;
   value: number;
-  questRelated: boolean;
 }
 
-interface QuestObjective {
-  id: string;
-  description: string;
-  progress: number;
-  required: number;
-  type: "kill" | "collect" | "explore" | "interact" | "escort";
-  status: "pending" | "in_progress" | "completed";
-}
-
-interface QuestReward {
-  type: "experience" | "gold" | "item";
-  amount: number;
+interface Inventory {
+  items: Record<string, {
+    item: Item;
+    quantity: number;
+  }>;
+  capacity: number;
 }
 ```
+
+## Error Handling
+
+All endpoints return error responses in the following format:
+```typescript
+{
+  error: string;
+  details?: string;
+}
+```
+
+Common HTTP status codes:
+- 200: Success
+- 400: Bad Request
+- 404: Not Found
+- 500: Internal Server Error
 
 ## Rate Limits
-- 30 requests per minute per player
-- 5 requests per second for state queries
-
-## Error Responses
-```typescript
-interface ErrorResponse {
-  error: {
-    code: string;
-    message: string;
-  }
-}
-```
-
-Common error codes:
-- `invalid_request`: Malformed request
-- `unauthorized`: Invalid or missing authentication
-- `not_found`: Resource not found
-- `server_error`: Internal server error
+- 50 requests per minute per player
+- Memory operations limited to 20 vector matches per query
