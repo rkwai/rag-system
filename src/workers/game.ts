@@ -47,15 +47,43 @@ class GameWorker {
         playerId: action.playerId,
         location: context.currentLocation,
         action: action.action,
-        limit: 3  // Limit to top 3 most relevant memories
+        limit: 3
       }, env);
 
       // Construct prompt with essential context only
       const prompt = {
         role: 'system',
-        content: `You are a creative and engaging dungeon master. The player is in ${context.currentLocation}.
+        content: `You are a creative and engaging dungeon master. Generate both a story response and game effects.
+                 The player is in ${context.currentLocation}.
                  Their recent actions: ${context.gameHistory.slice(-2).map((h) => h.action).join(', ')}.
-                 Relevant memories: ${memories.map(m => m.content).join(', ')}.`
+                 Relevant memories: ${memories.map(m => m.content).join(', ')}.
+                 
+                 Return your response in the following format (exactly as shown):
+                 {
+                   "story": "<your narrative response>",
+                   "effects": [
+                     {
+                       "type": "<item|location|quest|status>",
+                       "action": "<action string>",
+                       "data": {
+                         // data fields based on type
+                       }
+                     }
+                   ]
+                 }
+                 
+                 Effect types and their data:
+                 - item: {"id": "<string>", "quantity": <number>}
+                 - location: {"name": "<string>", "description": "<string>"}
+                 - quest: {"id": "<string>", "progress": <number>}
+                 - status: {"type": "<string>", "value": <number>}
+                 
+                 Important:
+                 1. Use only ASCII characters in the response
+                 2. Escape all quotes in strings
+                 3. No line breaks in strings
+                 4. Keep story concise but engaging
+                 5. Format the response as valid JSON with no special characters`
       };
 
       const userPrompt = {
@@ -63,24 +91,69 @@ class GameWorker {
         content: action.action
       };
 
-      // Generate response with a shorter timeout
+      // Generate combined story and effects response
       const response = await env.AI.run('@cf/mistral/mistral-7b-instruct-v0.1', {
         messages: [prompt, userPrompt],
-        max_tokens: 150,  // Limit response length
-        temperature: 0.7
+        max_tokens: 1000,
+        temperature: 0.8
       }) as AITextResponse;
 
       if (!response?.response) {
         throw new Error('Failed to generate story response');
       }
 
-      // Parse effects from the response
-      const effects = await this.interpretEffects(action, response.response, env);
+      try {
+        // Clean the response string before parsing
+        const cleanedResponse = response.response
+          .replace(/[\u0000-\u001F\u007F-\u009F]+/g, '') // Remove all control characters
+          .replace(/\n/g, ' ') // Replace newlines with spaces
+          .replace(/\s+/g, ' ') // Normalize whitespace
+          .replace(/\\"/g, '"') // Fix escaped quotes
+          .replace(/"{2,}/g, '"') // Fix multiple quotes
+          .replace(/([^\\])"([^:,}\]])/g, '$1\\"$2') // Escape unescaped quotes in values
+          .trim();
 
-      return {
-        story: response.response,
-        effects
-      };
+        let parsed;
+        try {
+          parsed = JSON.parse(cleanedResponse);
+        } catch (jsonError) {
+          // If direct parsing fails, try to extract JSON using regex
+          const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            parsed = JSON.parse(jsonMatch[0]);
+          } else {
+            throw jsonError;
+          }
+        }
+
+        const effects = this.validateAndProcessEffects(parsed.effects || []);
+
+        // Store important events as memories
+        const memoryEffects = effects.filter(effect => 
+          (effect.type === 'quest' || 
+           (effect.type === 'item' && effect.action === 'add') ||
+           effect.type === 'location')
+        );
+
+        if (memoryEffects.length > 0) {
+          await this.storeMemories(action.playerId, memoryEffects, parsed.story, env);
+        }
+
+        return {
+          story: parsed.story,
+          effects
+        };
+      } catch (parseError) {
+        console.error('Failed to parse AI response:', parseError, '\nResponse was:', response.response);
+        // If parsing fails, still return the response as story with no effects
+        return {
+          story: response.response
+            .replace(/[\u0000-\u001F\u007F-\u009F]+/g, '') // Clean control characters
+            .replace(/\n/g, ' ') // Replace newlines with spaces
+            .trim(),
+          effects: []
+        };
+      }
     } catch (error) {
       console.error('Failed to generate story response:', error);
       return {
@@ -98,30 +171,200 @@ class GameWorker {
     try {
       const prompt = {
         role: 'system',
-        content: `Analyze the following player action and story response. Extract any game effects that should occur (e.g. item found, location changed, quest progress). Return a JSON array of effects.`
+        content: `You are a game engine that analyzes story text to extract game effects. 
+        Extract ALL effects that should occur based on the story, including:
+        
+        - ITEM: Item changes (format: {type: "item", action: "add"|"remove"|"use", data: {id: string, quantity: number}})
+        - LOCATION: Location changes (format: {type: "location", action: "move", data: {name: string, description: string}})
+        - QUEST: Quest updates (format: {type: "quest", action: "start"|"update"|"complete", data: {id: string, progress: number}})
+        - STATUS: Status changes (format: {type: "status", action: "update", data: {type: string, value: number}})
+        
+        Return a JSON array of effects. Each effect must follow the format: {type, action, data}.
+        Be thorough but only extract effects that are explicitly or strongly implied in the text.
+        The type must be one of: "item", "location", "quest", or "status".`
       };
 
       const userPrompt = {
         role: 'user',
-        content: `Action: ${action.action}\nResponse: ${response}`
+        content: `Player Action: ${action.action}\n\nStory Response: ${response}\n\nExtract all game effects from this interaction.`
       };
 
       const effectsResponse = await env.AI.run('@cf/mistral/mistral-7b-instruct-v0.1', {
         messages: [prompt, userPrompt],
-        max_tokens: 100,
-        temperature: 0.3
+        max_tokens: 500,
+        temperature: 0.2  // Lower temperature for more consistent parsing
       }) as AITextResponse;
 
+      if (!effectsResponse?.response) return [];
+
+      let effects: GameEffect[] = [];
       try {
-        if (!effectsResponse?.response) return [];
-        const effects = JSON.parse(effectsResponse.response);
-        return Array.isArray(effects) ? effects : [];
-      } catch {
+        const parsedEffects = JSON.parse(effectsResponse.response);
+        effects = this.validateAndProcessEffects(parsedEffects);
+      } catch (parseError) {
+        console.error('Failed to parse effects:', parseError);
         return [];
       }
+
+      // Store important events as memories
+      const memoryEffects = effects.filter(effect => 
+        (effect.type === 'quest' || 
+         (effect.type === 'item' && effect.action === 'add') ||
+         effect.type === 'location')
+      );
+
+      if (memoryEffects.length > 0) {
+        await this.storeMemories(action.playerId, memoryEffects, response, env);
+      }
+
+      return effects;
     } catch (error) {
       console.error('Failed to interpret effects:', error);
       return [];
+    }
+  }
+
+  private validateAndProcessEffects(parsedEffects: any[]): GameEffect[] {
+    if (!Array.isArray(parsedEffects)) return [];
+
+    return parsedEffects.filter(effect => {
+      // Validate effect structure
+      if (!effect || typeof effect !== 'object') return false;
+      if (!effect.type || !effect.action || !effect.data) return false;
+
+      // Validate type is one of the allowed types
+      if (!['item', 'location', 'quest', 'status'].includes(effect.type)) return false;
+
+      return this.validateEffect(effect);
+    }).map(effect => ({
+      type: effect.type as 'item' | 'location' | 'quest' | 'status',
+      action: effect.action,
+      data: effect.data
+    }));
+  }
+
+  private validateEffect(effect: any): boolean {
+    // Validate common structure
+    if (!effect.type || !effect.action || !effect.data) return false;
+
+    // Validate data based on type
+    switch (effect.type) {
+      case 'item':
+        return (
+          ['add', 'remove', 'use'].includes(effect.action) &&
+          typeof effect.data.id === 'string' &&
+          typeof effect.data.quantity === 'number'
+        );
+      case 'status':
+        return (
+          effect.action === 'update' &&
+          typeof effect.data.type === 'string' &&
+          typeof effect.data.value === 'number'
+        );
+      case 'location':
+        return (
+          effect.action === 'move' &&
+          typeof effect.data.name === 'string' &&
+          typeof effect.data.description === 'string'
+        );
+      case 'quest':
+        return (
+          ['start', 'update', 'complete'].includes(effect.action) &&
+          typeof effect.data.id === 'string' &&
+          typeof effect.data.progress === 'number'
+        );
+      default:
+        return false;
+    }
+  }
+
+  private async storeMemories(
+    playerId: string,
+    effects: GameEffect[],
+    storyResponse: string,
+    env: Env
+  ): Promise<void> {
+    for (const effect of effects) {
+      let content = '';
+      let importance = 0.5;
+
+      switch (effect.type) {
+        case 'quest':
+          content = `Quest ${effect.action}: ${effect.data.id}`;
+          importance = 0.8;
+          break;
+        case 'item':
+          if (effect.action === 'add') {
+            content = `Found item: ${effect.data.id} (x${effect.data.quantity})`;
+            importance = 0.6;
+          }
+          break;
+        case 'location':
+          content = `Moved to ${effect.data.name}: ${effect.data.description}`;
+          importance = 0.7;
+          break;
+      }
+
+      if (!content) continue;
+
+      const memoryId = nanoid();
+      const memoryEntry: Omit<GameMemoryEntry, 'id'> = {
+        playerId,
+        type: effect.type,
+        content,
+        location: effect.type === 'location' ? effect.data.name : 'unknown',
+        importance,
+        timestamp: new Date(),
+        metadata: {
+          source: 'story_generation',
+          originalEffect: effect,
+          storyContext: storyResponse
+        }
+      };
+
+      try {
+        // Generate embedding for the memory
+        const text = `${memoryEntry.location} ${content}`;
+        const embeddingResponse = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+          text: text
+        }) as AIEmbeddingResponse;
+
+        if (!embeddingResponse?.data?.[0]) {
+          throw new Error('Failed to generate embedding');
+        }
+
+        const embedding = Array.from(embeddingResponse.data[0]);
+
+        // Store in vectorize
+        const metadata = this.createVectorMetadata(memoryEntry, playerId, memoryId);
+        const vectorData: VectorizeVector = {
+          id: memoryId,
+          values: embedding,
+          metadata
+        };
+
+        await env.MEMORIES_VECTORSTORE.insert([vectorData]);
+
+        // Store in D1 database
+        await env.DB.prepare(`
+          INSERT INTO memories (
+            id, player_id, type, content, location, importance, metadata, embedding, timestamp
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          memoryId,
+          playerId,
+          memoryEntry.type,
+          memoryEntry.content,
+          memoryEntry.location,
+          memoryEntry.importance,
+          JSON.stringify(memoryEntry.metadata),
+          JSON.stringify(embedding),
+          memoryEntry.timestamp.toISOString()
+        ).run();
+
+      } catch (error) {
+        console.error('Error storing memory:', error);
+      }
     }
   }
 
