@@ -674,15 +674,46 @@ describe('API Endpoints', () => {
       await new Promise(resolve => setTimeout(resolve, 2000));
     });
 
-    it('should generate story response', async () => {
+    // Helper function to safely parse effects
+    const parseEffects = (effectsStr: string) => {
+      try {
+        // Remove extra brackets and clean up escaped quotes
+        const cleaned = effectsStr
+          .replace(/^\[\[/, '[')
+          .replace(/\]\]$/, ']')
+          .replace(/\\"/g, '"');
+        return JSON.parse(cleaned);
+      } catch (e) {
+        console.warn('Failed to parse effects:', e);
+        return [];
+      }
+    };
+
+    // Helper function to extract structured data from story response
+    const extractStructuredData = (story: string) => {
+      const sections = story.split(/\[(\w+)\]/g).filter(Boolean);
+      const data: Record<string, string> = {};
+      
+      for (let i = 0; i < sections.length; i += 2) {
+        if (i + 1 < sections.length) {
+          data[sections[i]] = sections[i + 1].trim();
+        }
+      }
+      
+      return data;
+    };
+
+    it('should generate contextually relevant story responses', async () => {
       const res = await fetch(`${API_URL}/game/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerId: testPlayer.id,
-          action: 'I look around',  // Simple observation action
+          action: 'I look around',
           context: {
-            currentLocation: testPlayer.location,
+            currentLocation: 'Dark Forest',
+            timeOfDay: 'night',
+            weather: 'stormy',
             inventory: [],
             questStates: [],
             gameHistory: []
@@ -693,26 +724,35 @@ describe('API Endpoints', () => {
       expect(res.status).toBe(200);
       const response = await res.json();
       
-      // Print response for debugging
-      if (!response.story) {
-        console.log('Unexpected response:', response);
-      }
-
+      // Verify basic response structure
       expect(response).toHaveProperty('story');
       expect(typeof response.story).toBe('string');
       expect(response.story.length).toBeGreaterThan(0);
-    }, 60000);  // 60 second timeout
+      
+      // Parse structured data from the story
+      const structuredData = extractStructuredData(response.story);
+      expect(Object.keys(structuredData).length).toBeGreaterThan(0);
+      
+      // Verify contextual relevance through narrative
+      const story = response.story.toLowerCase();
+      expect(story).toMatch(/dark|night|forest|storm/); // Should mention environmental context
+    }, 60000); // 60 second timeout
 
-    it('should handle inventory actions', async () => {
+    it('should incorporate inventory context in responses', async () => {
+      const inventory = [
+        { id: 'torch', name: 'Torch', state: 'lit' },
+        { id: 'map', name: 'Forest Map', state: 'readable' }
+      ];
+
       const res = await fetch(`${API_URL}/game/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerId: testPlayer.id,
-          action: 'I check my bag',  // Simple inventory action
+          action: 'I check my inventory',
           context: {
             currentLocation: testPlayer.location,
-            inventory: ['torch', 'map'],
+            inventory,
             questStates: [],
             gameHistory: []
           }
@@ -721,26 +761,47 @@ describe('API Endpoints', () => {
 
       expect(res.status).toBe(200);
       const response = await res.json();
-      expect(response).toHaveProperty('story');
-      expect(typeof response.story).toBe('string');
-      expect(response.story.length).toBeGreaterThan(0);
-    }, 60000);
+      
+      // Parse structured data from the story
+      const structuredData = extractStructuredData(response.story);
+      
+      // Verify narrative mentions at least one inventory item
+      const story = response.story.toLowerCase();
+      expect(
+        story.match(/torch|light|lit|map|chart|guide|carry|carrying|bag|inventory|items?|possess(ing|ions)?/)
+      ).not.toBeNull();
 
-    it('should handle quest context', async () => {
+      // Verify inventory data in structured sections
+      if (structuredData.inventory) {
+        const inventorySection = structuredData.inventory.toLowerCase();
+        // Check for at least one item
+        expect(
+          inventorySection.match(/torch|light|lit|map|chart|guide|carry|carrying|bag|inventory|items?|possess/)
+        ).not.toBeNull();
+      }
+    }, 60000); // 60 second timeout
+
+    it('should process quest-related actions appropriately', async () => {
+      const activeQuest = {
+        id: 'find_amulet',
+        title: 'The Lost Amulet',
+        progress: 0,
+        description: 'Find the missing amulet in the Dark Forest',
+        objectives: [
+          { id: 'search_forest', description: 'Search the Dark Forest', completed: false }
+        ]
+      };
+
       const res = await fetch(`${API_URL}/game/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerId: testPlayer.id,
-          action: 'I check my quest log',  // Simple quest check
+          action: 'I search for the amulet',
           context: {
-            currentLocation: testPlayer.location,
+            currentLocation: 'Dark Forest',
             inventory: [],
-            questStates: [{
-              id: 'find_amulet',
-              progress: 0,
-              description: 'Find the missing amulet'
-            }],
+            questStates: [activeQuest],
             gameHistory: []
           }
         }),
@@ -748,10 +809,140 @@ describe('API Endpoints', () => {
 
       expect(res.status).toBe(200);
       const response = await res.json();
+      
+      // Parse structured data from the story
+      const structuredData = extractStructuredData(response.story);
+      
+      // Verify quest-related narrative
       expect(response).toHaveProperty('story');
-      expect(typeof response.story).toBe('string');
+      const story = response.story.toLowerCase();
+      expect(story).toMatch(/amulet|search|find|lost/); // Quest-related terms
+
+      // Check for quest updates in structured data
+      if (structuredData.quest) {
+        const questSection = structuredData.quest.toLowerCase();
+        expect(questSection).toMatch(/amulet|progress|objective|search/);
+      }
+    }, 60000); // 60 second timeout
+
+    it('should handle combat actions with appropriate narrative', async () => {
+      const res = await fetch(`${API_URL}/game/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: testPlayer.id,
+          action: 'I attack the wolf with my sword',
+          context: {
+            currentLocation: testPlayer.location,
+            inventory: [{ id: 'sword', name: 'Iron Sword', type: 'weapon', damage: 10 }],
+            combatState: {
+              inCombat: true,
+              enemies: [{ id: 'wolf1', name: 'Dire Wolf', health: 50, damage: 8 }]
+            },
+            questStates: [],
+            gameHistory: []
+          }
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const response = await res.json();
+      
+      // Parse structured data from the story
+      const structuredData = extractStructuredData(response.story);
+      
+      // Verify combat narrative
+      expect(response).toHaveProperty('story');
+      const story = response.story.toLowerCase();
+      expect(story).toMatch(/attack|strike|hit|slash|swing|fight|dodge|wolf/); // Combat-related terms
+
+      // Check for combat results in structured data
+      if (structuredData.combat) {
+        const combatSection = structuredData.combat.toLowerCase();
+        expect(combatSection).toMatch(/damage|health|attack|hit/);
+      }
+    }, 60000); // 60 second timeout
+
+    it('should handle empty or invalid actions gracefully', async () => {
+      const res = await fetch(`${API_URL}/game/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: testPlayer.id,
+          action: '', // Empty action
+          context: {
+            currentLocation: testPlayer.location,
+            inventory: [],
+            questStates: [],
+            gameHistory: []
+          }
+        }),
+      });
+
+      // LLM handles empty actions by generating a response
+      expect(res.status).toBe(200);
+      const response = await res.json();
+      
+      // Should have some kind of response
+      expect(response).toHaveProperty('story');
       expect(response.story.length).toBeGreaterThan(0);
-    }, 60000);
+      
+      // Parse structured data from the story
+      const structuredData = extractStructuredData(response.story);
+      
+      // Response should either:
+      // 1. Express confusion/ask for clarification
+      // 2. Generate ambient narrative about the current location
+      // 3. Prompt the player for action
+      // 4. Describe the environment or situation
+      const story = response.story.toLowerCase();
+      expect(
+        story.match(/unclear|specify|what|clarify|help|confused|do what/) || // Confusion
+        story.match(/you see|you hear|you feel|around you|before you/) || // Ambient narrative
+        story.match(/what would you like|what do you|what will you/) || // Action prompt
+        story.match(/forest|trees|dark|path|air|wind|shadows?|light/) || // Environment
+        story.match(/stand|wait|look|watch|observe/) // Basic actions
+      ).not.toBeNull();
+    }, 60000); // 60 second timeout
+
+    it('should maintain narrative consistency with game history', async () => {
+      const gameHistory = [
+        { action: 'I entered the forest', response: 'You step into the dark forest cautiously.' },
+        { action: 'I found a torch', response: 'You discover an unlit torch on the ground.' }
+      ];
+
+      const res = await fetch(`${API_URL}/game/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: testPlayer.id,
+          action: 'I light the torch',
+          context: {
+            currentLocation: testPlayer.location,
+            inventory: [{ id: 'torch', name: 'Torch', state: 'unlit' }],
+            questStates: [],
+            gameHistory
+          }
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const response = await res.json();
+      
+      // Parse structured data from the story
+      const structuredData = extractStructuredData(response.story);
+      
+      // Verify narrative consistency
+      expect(response).toHaveProperty('story');
+      const story = response.story.toLowerCase();
+      expect(story).toMatch(/torch|light|flame|fire/); // References to lighting the torch
+
+      // Check for item state changes in structured data
+      if (structuredData.items) {
+        const itemsSection = structuredData.items.toLowerCase();
+        expect(itemsSection).toMatch(/torch.*lit|lit.*torch/);
+      }
+    }, 60000); // 60 second timeout
   });
 
   /**
