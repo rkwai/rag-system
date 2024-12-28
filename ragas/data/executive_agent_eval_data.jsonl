@@ -1,0 +1,2 @@
+{"query": "Schedule a meeting with John Doe tomorrow at 10 AM and email him the agenda.", "ground_truth": "Called appointment agent to schedule meeting with John Doe for tomorrow at 10 AM. Called email agent to send agenda to John Doe.", "context": "Agenda details: Discuss project updates and timelines."}
+{"query": "Find the latest stock price of AAPL and send it to my personal email.", "ground_truth": "Called research agent to find AAPL stock price. Called email agent to send the price to personal email address.", "context": "Personal email address: myemail@example.com"}

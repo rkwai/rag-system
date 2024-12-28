@@ -1,0 +1,8 @@
+# requirements.txt
+ragas>=0.0.20
+datasets>=2.15.0
+pandas>=2.0.0
+pyyaml>=6.0.1
+torch>=2.1.0
+transformers>=4.36.0
+numpy>=1.24.0

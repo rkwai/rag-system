@@ -1,0 +1,16 @@
+# config/config.yaml
+llm:
+  model_name: "gpt-4-turbo-preview"  # Or your preferred model
+  api_key: "YOUR_OPENAI_API_KEY"  # Replace with your actual API key
+
+prompts:
+  executive_agent:
+    instruction: "You are an executive assistant. You efficiently manage tasks by calling upon specialized agents."
+  email_agent:
+    instruction: "You are an email agent responsible for composing and sending emails based on instructions."
+  appointment_agent:
+    instruction: "You are an appointment agent. You schedule and manage appointments based on user requests."
+  research_agent:
+    instruction: "You are a research agent. You find relevant information based on user queries."
+  article_writing_agent:
+    instruction: "You are an article writing agent. You generate well-structured and informative articles."
