@@ -1,10 +1,10 @@
 from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevancy
+from ragas.metrics import faithfulness, answer_relevancy, context_relevancy  # Include context for calendar/schedule awareness
 import pandas as pd
 import json
 import os
 import logging
-from utils.agent_interface import call_email_agent
+from utils.agent_interface import call_appointment_agent
 
 # Configure logging
 logging.basicConfig(
@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def validate_function_calls(response, expected_calls):
-    """Validate that the email agent made the correct function calls"""
+    """Validate that the appointment agent made the correct function calls"""
     try:
         response_calls = response.get('function_calls', [])
         
@@ -33,19 +33,31 @@ def validate_function_calls(response, expected_calls):
             expected_args = expected_call['args']
             actual_args = actual_call['args']
             
-            # For compose_email, check structure but allow content flexibility
-            if expected_call['name'] == 'compose_email':
-                if not all(key in actual_args for key in ['to', 'subject', 'body']):
-                    logger.error("Missing required email fields")
+            # Validate based on function type
+            if expected_call['name'] == 'check_availability':
+                if not all(key in actual_args for key in ['start_date', 'end_date', 'time_range', 'duration']):
+                    logger.error("Missing required availability check fields")
                     return False
-                if not isinstance(actual_args['to'], list):
-                    logger.error("'to' field should be a list of recipients")
+                    
+            elif expected_call['name'] == 'find_common_availability':
+                if not all(key in actual_args for key in ['attendees', 'duration']):
+                    logger.error("Missing required common availability fields")
                     return False
-            
-            # For send_email, check draft_id exists
-            elif expected_call['name'] == 'send_email':
-                if 'draft_id' not in actual_args:
-                    logger.error("Missing draft_id in send_email call")
+                if not isinstance(actual_args['attendees'], list):
+                    logger.error("'attendees' field should be a list")
+                    return False
+                    
+            elif expected_call['name'] == 'book_meeting_room':
+                if not all(key in actual_args for key in ['room', 'date', 'start_time', 'duration']):
+                    logger.error("Missing required room booking fields")
+                    return False
+                    
+            elif expected_call['name'] == 'create_meeting':
+                if not all(key in actual_args for key in ['title', 'start_time', 'duration', 'attendees']):
+                    logger.error("Missing required meeting creation fields")
+                    return False
+                if not isinstance(actual_args['attendees'], list):
+                    logger.error("'attendees' field should be a list")
                     return False
                     
         return True
@@ -73,10 +85,10 @@ def load_data(file_path: str) -> pd.DataFrame:
         raise
 
 def generate_answers(data: pd.DataFrame) -> pd.DataFrame:
-    """Generate answers using the email agent"""
+    """Generate answers using the appointment agent"""
     try:
-        logger.info("Generating answers using email agent")
-        data['answer'] = data['query'].apply(call_email_agent)
+        logger.info("Generating answers using appointment agent")
+        data['answer'] = data['query'].apply(call_appointment_agent)
         
         # Validate function calls
         data['function_calls_valid'] = data.apply(
@@ -93,7 +105,7 @@ def run_evaluation(eval_data: pd.DataFrame):
     """Run the evaluation metrics"""
     try:
         logger.info("Running evaluation metrics")
-        metrics = [faithfulness, answer_relevancy]
+        metrics = [faithfulness, answer_relevancy, context_relevancy]
         
         # Add custom metric for function calls
         eval_data['function_calls_score'] = eval_data['function_calls_valid'].astype(float)
@@ -130,23 +142,23 @@ def save_results(results, output_path: str):
 
 if __name__ == "__main__":
     try:
-        logger.info("Starting email agent evaluation")
+        logger.info("Starting appointment agent evaluation")
         
         # Load and process data
-        eval_data = load_data("data/email_agent_eval_data.jsonl")
+        eval_data = load_data("data/appointment_agent_eval_data.jsonl")
         eval_data = generate_answers(eval_data)
         
         # Run evaluation
         results = run_evaluation(eval_data)
         
         # Save results
-        output_path = "eval_results/email_agent_results.csv"
+        output_path = "eval_results/appointment_agent_results.csv"
         save_results(results, output_path)
         
         # Log accuracy metrics
         logger.info(f"Function Calls Accuracy: {results.get('function_calls_accuracy', 0):.2%}")
-        logger.info("Email agent evaluation completed successfully")
+        logger.info("Appointment agent evaluation completed successfully")
         
     except Exception as e:
-        logger.error(f"Email agent evaluation failed: {str(e)}")
-        raise
+        logger.error(f"Appointment agent evaluation failed: {str(e)}")
+        raise 

@@ -1,0 +1,121 @@
+{
+  "query": "Write a technical blog post about implementing zero-trust security in cloud environments",
+  "ground_truth": {
+    "function_calls": [
+      {
+        "name": "research_topic",
+        "args": {
+          "topic": "zero-trust security",
+          "focus": "cloud implementation",
+          "technical_level": "advanced"
+        }
+      },
+      {
+        "name": "generate_outline",
+        "args": {
+          "sections": [
+            "Introduction to Zero-Trust",
+            "Identity Verification",
+            "Network Segmentation",
+            "Access Controls",
+            "Monitoring"
+          ],
+          "content_type": "technical_blog"
+        }
+      },
+      {
+        "name": "generate_content",
+        "args": {
+          "format": "markdown",
+          "word_count": 1500,
+          "include_code": true,
+          "include_diagrams": true,
+          "style": "technical_but_accessible"
+        }
+      }
+    ],
+    "expected_response": "Technical blog post generated with implementation details, code examples, and architecture diagrams."
+  },
+  "context": "Target audience: IT professionals. Length: 1500 words. Include: Code examples, Architecture diagrams. Style: Technical but accessible"
+}
+{
+  "query": "Create a comprehensive guide about sustainable urban gardening",
+  "ground_truth": {
+    "function_calls": [
+      {
+        "name": "research_topic",
+        "args": {
+          "topic": "urban gardening",
+          "focus": "sustainability",
+          "technical_level": "beginner"
+        }
+      },
+      {
+        "name": "generate_outline",
+        "args": {
+          "sections": [
+            "Introduction",
+            "Space Planning",
+            "Soil Management",
+            "Water Conservation",
+            "Plant Selection",
+            "Pest Control"
+          ],
+          "content_type": "how_to_guide"
+        }
+      },
+      {
+        "name": "generate_content",
+        "args": {
+          "format": "markdown",
+          "word_count": 2000,
+          "include_images": true,
+          "include_steps": true,
+          "style": "informative_and_engaging"
+        }
+      }
+    ],
+    "expected_response": "Comprehensive urban gardening guide generated with practical tips, step-by-step instructions, and seasonal guidelines."
+  },
+  "context": "Target audience: Beginners to intermediate gardeners. Length: 2000 words. Include: Step-by-step guides, Photos. Style: Informative and engaging"
+}
+{
+  "query": "Write a case study about a successful digital transformation project",
+  "ground_truth": {
+    "function_calls": [
+      {
+        "name": "research_case",
+        "args": {
+          "industry": "retail",
+          "project_type": "digital_transformation",
+          "timeframe": "18_months"
+        }
+      },
+      {
+        "name": "generate_outline",
+        "args": {
+          "sections": [
+            "Executive Summary",
+            "Challenge",
+            "Solution",
+            "Implementation",
+            "Results",
+            "Lessons Learned"
+          ],
+          "content_type": "case_study"
+        }
+      },
+      {
+        "name": "generate_content",
+        "args": {
+          "format": "business_case",
+          "include_metrics": true,
+          "include_roi": true,
+          "style": "professional_and_data_driven"
+        }
+      }
+    ],
+    "expected_response": "Professional case study generated with clear metrics, ROI analysis, and implementation insights."
+  },
+  "context": "Industry: Retail. Project duration: 18 months. Key metrics: 200% online sales growth, 40% operational efficiency improvement. Style: Professional, data-driven"
+} 

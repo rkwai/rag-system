@@ -36,4 +36,4 @@ fi
 echo "Installing dependencies..."
 uv pip install -r requirements.txt
 
-echo "Setup complete! You can now run: source .venv/bin/activate && python rpg_client.py" 
+echo "Setup complete! You can now run: source .venv/bin/activate && python evals/*.py" 

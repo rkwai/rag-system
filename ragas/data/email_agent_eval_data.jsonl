@@ -1,2 +1,69 @@
-{"query": "Send an email to john.doe@example.com with the subject 'Meeting Confirmation' and the body 'Your meeting is confirmed for tomorrow at 10 AM.'", "ground_truth": "Email sent successfully to john.doe@example.com with subject 'Meeting Confirmation' and body 'Your meeting is confirmed for tomorrow at 10 AM.'", "context": ""}
-{"query": "Draft an email to my team about the upcoming deadline.", "ground_truth": "Email drafted with subject 'Upcoming Project Deadline' and details about the deadline.", "context": "Team members: alice@example.com, bob@example.com. Deadline: Friday, November 10th."}
+{
+  "query": "Draft a professional email to schedule a team meeting for next Tuesday at 2 PM",
+  "ground_truth": {
+    "function_calls": [
+      {
+        "name": "compose_email",
+        "args": {
+          "to": ["john@example.com", "sarah@example.com", "mike@example.com"],
+          "subject": "Team Meeting - Next Tuesday at 2 PM",
+          "body": "Dear Team,\n\nI would like to schedule a team meeting for next Tuesday at 2 PM. Please let me know if you have any conflicts.\n\nBest regards"
+        }
+      },
+      {
+        "name": "send_email",
+        "args": {
+          "draft_id": "<email_draft_id>"
+        }
+      }
+    ],
+    "expected_response": "Email drafted and sent successfully to team members regarding the meeting next Tuesday at 2 PM."
+  },
+  "context": "Team members: john@example.com, sarah@example.com, mike@example.com"
+}
+{
+  "query": "Write an email to decline a vendor proposal politely",
+  "ground_truth": {
+    "function_calls": [
+      {
+        "name": "compose_email",
+        "args": {
+          "to": ["vendor@supplier.com"],
+          "subject": "Re: Vendor Proposal",
+          "body": "Dear [Vendor],\n\nThank you for submitting your proposal. After careful consideration, we have decided to pursue other options at this time. We appreciate your time and effort.\n\nBest regards"
+        }
+      },
+      {
+        "name": "send_email",
+        "args": {
+          "draft_id": "<email_draft_id>"
+        }
+      }
+    ],
+    "expected_response": "Email drafted and sent successfully declining the vendor proposal."
+  },
+  "context": "Vendor proposal received on Monday for office supplies, total cost $5,000"
+}
+{
+  "query": "Send a project status update email to the client",
+  "ground_truth": {
+    "function_calls": [
+      {
+        "name": "compose_email",
+        "args": {
+          "to": ["client@client.com"],
+          "subject": "Project Status Update",
+          "body": "Dear [Client],\n\nI'm writing to provide an update on the project. We are currently on track with our milestones and expect to complete Phase 1 by the end of this week.\n\nBest regards"
+        }
+      },
+      {
+        "name": "send_email",
+        "args": {
+          "draft_id": "<email_draft_id>"
+        }
+      }
+    ],
+    "expected_response": "Status update email drafted and sent successfully to the client."
+  },
+  "context": "Project is 60% complete, Phase 1 deadline is Friday, no major issues reported"
+}
