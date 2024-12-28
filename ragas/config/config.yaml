@@ -1,309 +1,54 @@
 # config/config.yaml
 llm:
-  provider: "google"
-  model_name: "gemini-2.0-flash-exp"
-  api_key: "${GOOGLE_API_KEY}"  # Use environment variable
+  model_name: gemini-2.0-flash-exp
   temperature: 0.7
-  max_output_tokens: 2048
-  top_p: 0.8
+  top_p: 0.95
   top_k: 40
+  max_output_tokens: 1024
   safety_settings:
-    harassment: "block_none"
-    hate_speech: "block_none"
-    sexually_explicit: "block_none"
-    dangerous_content: "block_none"
+    - HARM_CATEGORY_HARASSMENT
+    - HARM_CATEGORY_HATE_SPEECH
+    - HARM_CATEGORY_SEXUALLY_EXPLICIT
+    - HARM_CATEGORY_DANGEROUS_CONTENT
 
 prompts:
-  system_context: "You are an AI assistant that helps with various tasks. You have access to specialized functions that you can call to accomplish tasks. Always use the appropriate functions when available."
-  
+  system_context: |
+    You are an AI assistant that helps users by coordinating tasks using specialized agents.
+    You can call other agents to perform specific tasks.
+    When you receive a request, analyze it and determine which agents to call and in what order.
+    Always provide clear explanations of your decisions and actions.
+
   executive_agent:
-    instruction: "You are an executive assistant. You efficiently manage tasks by calling upon specialized agents. Always break down complex tasks into subtasks and delegate them to the appropriate specialized agents."
+    instruction: |
+      You are the executive agent responsible for coordinating tasks across multiple specialized agents.
+      Your role is to:
+      1. Analyze the user's request
+      2. Break it down into subtasks
+      3. Assign tasks to appropriate agents
+      4. Ensure tasks are executed in the correct order
+      5. Provide a summary of actions taken
     functions:
       call_email_agent:
-        description: "Delegate a task to the email agent"
+        description: Call the email agent to handle email-related tasks
         parameters:
           task:
-            type: "string"
-            description: "Email task to be performed"
-          context:
-            type: "object"
-            description: "Additional context for the email task"
-        returns:
-          task_id: "string"
-          status: "string"
-          result: "object"
-      
+            type: string
+            description: The email task to perform
       call_appointment_agent:
-        description: "Delegate a task to the appointment agent"
+        description: Call the appointment agent to handle scheduling tasks
         parameters:
           task:
-            type: "string"
-            description: "Scheduling task to be performed"
-          context:
-            type: "object"
-            description: "Additional context for the scheduling task"
-        returns:
-          task_id: "string"
-          status: "string"
-          result: "object"
-      
+            type: string
+            description: The scheduling task to perform
       call_research_agent:
-        description: "Delegate a task to the research agent"
+        description: Call the research agent to gather information
         parameters:
           task:
-            type: "string"
-            description: "Research task to be performed"
-          context:
-            type: "object"
-            description: "Additional context for the research task"
-        returns:
-          task_id: "string"
-          status: "string"
-          result: "object"
-      
+            type: string
+            description: The research task to perform
       call_article_writing_agent:
-        description: "Delegate a task to the article writing agent"
+        description: Call the article writing agent to create content
         parameters:
           task:
-            type: "string"
-            description: "Writing task to be performed"
-          context:
-            type: "object"
-            description: "Additional context for the writing task"
-        returns:
-          task_id: "string"
-          status: "string"
-          result: "object"
-      
-      check_task_status:
-        description: "Check the status of a delegated task"
-        parameters:
-          task_id:
-            type: "string"
-            description: "ID of the task to check"
-        returns:
-          status: "string"
-          completion_percentage: "number"
-          result: "object"
-      
-      coordinate_tasks:
-        description: "Coordinate multiple agent tasks in sequence or parallel"
-        parameters:
-          tasks:
-            type: "array"
-            description: "List of tasks to coordinate"
-            items:
-              type: "object"
-              properties:
-                agent:
-                  type: "string"
-                  enum: ["email", "appointment", "research", "article_writing"]
-                task:
-                  type: "string"
-                context:
-                  type: "object"
-                dependencies:
-                  type: "array"
-                  items:
-                    type: "string"
-        returns:
-          coordination_id: "string"
-          task_statuses: "object"
-
-  email_agent:
-    instruction: "You are an email agent responsible for composing and sending emails based on instructions. Always structure emails professionally and use appropriate tone based on context."
-    functions:
-      compose_email:
-        description: "Compose a new email draft"
-        parameters:
-          to:
-            type: "array"
-            description: "List of email recipients"
-            items:
-              type: "string"
-          subject:
-            type: "string"
-            description: "Email subject line"
-          body:
-            type: "string"
-            description: "Email body content"
-        returns:
-          draft_id: "string"
-      send_email:
-        description: "Send a composed email draft"
-        parameters:
-          draft_id:
-            type: "string"
-            description: "ID of the email draft to send"
-        returns:
-          success: "boolean"
-
-  appointment_agent:
-    instruction: "You are an appointment agent. You schedule and manage appointments based on user requests."
-    functions:
-      check_availability:
-        description: "Check calendar availability for a time period"
-        parameters:
-          start_date:
-            type: "string"
-            description: "Start date to check"
-          end_date:
-            type: "string"
-            description: "End date to check"
-          time_range:
-            type: "string"
-            description: "Time range in 24h format (e.g., '9:00-17:00')"
-          duration:
-            type: "string"
-            description: "Duration in minutes"
-        returns:
-          available_slots: "array"
-      find_common_availability:
-        description: "Find common available time slots for multiple attendees"
-        parameters:
-          attendees:
-            type: "array"
-            description: "List of attendee emails"
-          duration:
-            type: "string"
-            description: "Meeting duration in minutes"
-          exclude_times:
-            type: "array"
-            description: "Time ranges to exclude"
-        returns:
-          common_slots: "array"
-      book_meeting_room:
-        description: "Book a meeting room"
-        parameters:
-          room:
-            type: "string"
-            description: "Room identifier or name"
-          date:
-            type: "string"
-            description: "Meeting date"
-          start_time:
-            type: "string"
-            description: "Start time in 24h format"
-          duration:
-            type: "string"
-            description: "Duration in minutes"
-        returns:
-          room_id: "string"
-      create_meeting:
-        description: "Create a calendar meeting"
-        parameters:
-          title:
-            type: "string"
-            description: "Meeting title"
-          start_time:
-            type: "string"
-            description: "Meeting start time"
-          duration:
-            type: "string"
-            description: "Duration in minutes"
-          attendees:
-            type: "array"
-            description: "List of attendee emails"
-          location:
-            type: "string"
-            description: "Meeting location or room ID"
-          meeting_type:
-            type: "string"
-            enum: ["in_person", "video_conference"]
-        returns:
-          meeting_id: "string"
-
-  research_agent:
-    instruction: "You are a research agent. You find relevant information based on user queries."
-    functions:
-      search_databases:
-        description: "Search multiple databases for information"
-        parameters:
-          keywords:
-            type: "array"
-            description: "Search keywords"
-          date_range:
-            type: "string"
-            description: "Date range for search"
-          regions:
-            type: "array"
-            description: "Geographic regions to include"
-          source_types:
-            type: "array"
-            description: "Types of sources to search"
-        returns:
-          search_results: "array"
-      analyze_data:
-        description: "Analyze collected data"
-        parameters:
-          metrics:
-            type: "array"
-            description: "Metrics to analyze"
-          companies:
-            type: "array"
-            description: "Companies to analyze"
-          time_period:
-            type: "string"
-            description: "Time period for analysis"
-        returns:
-          analysis_results: "object"
-      generate_report:
-        description: "Generate a research report"
-        parameters:
-          format:
-            type: "string"
-            enum: ["market_analysis", "competitor_analysis", "trend_report"]
-          include_charts:
-            type: "boolean"
-            description: "Whether to include charts and graphs"
-        returns:
-          report: "object"
-
-  article_writing_agent:
-    instruction: "You are an article writing agent. You generate well-structured and informative articles."
-    functions:
-      research_topic:
-        description: "Research a topic for article writing"
-        parameters:
-          topic:
-            type: "string"
-            description: "Main topic to research"
-          focus:
-            type: "string"
-            description: "Specific focus area"
-          technical_level:
-            type: "string"
-            enum: ["beginner", "intermediate", "advanced"]
-        returns:
-          research_data: "object"
-      generate_outline:
-        description: "Generate an article outline"
-        parameters:
-          sections:
-            type: "array"
-            description: "List of section titles"
-          content_type:
-            type: "string"
-            enum: ["blog_post", "technical_article", "how_to_guide", "case_study"]
-        returns:
-          outline: "object"
-      generate_content:
-        description: "Generate article content"
-        parameters:
-          format:
-            type: "string"
-            enum: ["markdown", "html", "plain_text"]
-          word_count:
-            type: "integer"
-            description: "Target word count"
-          include_code:
-            type: "boolean"
-            description: "Whether to include code examples"
-          include_diagrams:
-            type: "boolean"
-            description: "Whether to include diagrams"
-          style:
-            type: "string"
-            description: "Writing style to use"
-        returns:
-          content: "object"
+            type: string
+            description: The writing task to perform

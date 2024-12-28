@@ -77,14 +77,48 @@ The following environment variables need to be set in your `.env` file:
 
 ## 🏃‍♂️ Running Evaluations
 
-### Executive Agent Evaluation
+### Run All Evaluations
+To run all evaluations in parallel:
 ```bash
-python evals/executive_agent_eval.py
+./run_evals.py
 ```
 
-### Email Agent Evaluation
+This will:
+1. Create a timestamped results directory
+2. Run all agent evaluations concurrently
+3. Generate a summary report
+4. Save results in `eval_results/run_YYYYMMDD_HHMMSS/`
+
+### Run Individual Evaluations
+To run specific evaluations:
+
 ```bash
+# Executive Agent
+python evals/executive_agent_eval.py
+
+# Email Agent
 python evals/email_agent_eval.py
+
+# Appointment Agent
+python evals/appointment_agent_eval.py
+
+# Research Agent
+python evals/research_agent_eval.py
+
+# Article Writing Agent
+python evals/article_writing_agent_eval.py
+```
+
+### Results Structure
+```
+eval_results/
+└── run_YYYYMMDD_HHMMSS/
+    ├── executive_agent_results.csv
+    ├── email_agent_results.csv
+    ├── appointment_agent_results.csv
+    ├── research_agent_results.csv
+    ├── article_writing_agent_results.csv
+    └── summary.txt
 ```
 
 ## 📈 Metrics

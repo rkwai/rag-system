@@ -8,8 +8,8 @@ from utils.agent_interface import call_email_agent
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=os.getenv('LOG_LEVEL', 'INFO'),
+    format=os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 )
 logger = logging.getLogger(__name__)
 
