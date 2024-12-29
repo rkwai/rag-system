@@ -127,9 +127,27 @@ async def run_evaluation(eval_data: pd.DataFrame):
             llm=None
         )
         
-        # Add custom metrics to results
-        results['function_calls_accuracy'] = eval_data['function_calls_score'].mean()
-        results['task_coordination_accuracy'] = eval_data['task_coordination_score'].mean()
+        # Calculate custom metrics
+        function_calls_accuracy = eval_data['function_calls_score'].mean() * 100
+        task_coordination_accuracy = eval_data['task_coordination_score'].mean() * 100
+        
+        # Create results dictionary
+        results = {
+            'timestamp': pd.Timestamp.now(),
+            'function_calls_accuracy': function_calls_accuracy,
+            'task_coordination_accuracy': task_coordination_accuracy,
+            'faithfulness_score': results.get('faithfulness', 0) * 100,
+            'relevancy_score': results.get('answer_relevancy', 0) * 100,
+            'context_relevancy_score': results.get('context_relevancy', 0) * 100,
+            'num_examples': len(eval_data)
+        }
+        
+        # Log metrics
+        logger.info(f"Function Calls Accuracy: {function_calls_accuracy:.2f}%")
+        logger.info(f"Task Coordination Accuracy: {task_coordination_accuracy:.2f}%")
+        logger.info(f"Faithfulness Score: {results['faithfulness_score']:.2f}%")
+        logger.info(f"Answer Relevancy Score: {results['relevancy_score']:.2f}%")
+        logger.info(f"Context Relevancy Score: {results['context_relevancy_score']:.2f}%")
         
         return results
     except Exception as e:
@@ -141,12 +159,16 @@ def save_results(results, output_path: str):
     try:
         logger.info(f"Saving results to {output_path}")
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        results_df = results.to_pandas()
         
-        # Add custom metrics to the results
-        results_df['function_calls_accuracy'] = results.get('function_calls_accuracy', 0)
-        results_df['task_coordination_accuracy'] = results.get('task_coordination_accuracy', 0)
+        # Create results DataFrame
+        results_df = pd.DataFrame([results])
         
+        # Load existing results if they exist
+        if os.path.exists(output_path):
+            existing_results = pd.read_csv(output_path)
+            results_df = pd.concat([existing_results, results_df], ignore_index=True)
+        
+        # Save all results
         results_df.to_csv(output_path, index=False)
         logger.info("Results saved successfully")
     except Exception as e:

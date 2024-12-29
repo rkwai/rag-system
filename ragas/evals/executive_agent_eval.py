@@ -252,21 +252,16 @@ async def run_evaluation(eval_data: pd.DataFrame):
         relevancy_score = sum(relevancy_scores) / len(relevancy_scores) * 100
         precision_score = sum(precision_scores) / len(precision_scores) * 100
         
-        # Save results
-        results = pd.DataFrame({
-            'query': eval_data['query'],
-            'context': eval_data['context'],
-            'answer': eval_data['answer'].apply(lambda x: x.get('content', '')),
-            'agent_calls_valid': eval_data['agent_calls_valid'],
-            'task_coordination_valid': eval_data['task_coordination_valid'],
-            'faithfulness_score': faithfulness_scores,
-            'relevancy_score': relevancy_scores,
-            'precision_score': precision_scores
-        })
-        
-        os.makedirs('eval_results', exist_ok=True)
-        results.to_csv('eval_results/executive_agent_results.csv', index=False)
-        logger.info("Results saved successfully")
+        # Create results dictionary
+        results = {
+            'timestamp': pd.Timestamp.now(),
+            'agent_calls_accuracy': agent_calls_accuracy,
+            'task_coordination_accuracy': task_coordination_accuracy,
+            'faithfulness_score': faithfulness_score,
+            'relevancy_score': relevancy_score,
+            'precision_score': precision_score,
+            'num_examples': len(eval_data)
+        }
         
         # Log metrics
         logger.info(f"Agent Calls Accuracy: {agent_calls_accuracy:.2f}%")
@@ -274,6 +269,8 @@ async def run_evaluation(eval_data: pd.DataFrame):
         logger.info(f"Faithfulness Score: {faithfulness_score:.2f}%")
         logger.info(f"Answer Relevancy Score: {relevancy_score:.2f}%")
         logger.info(f"Context Precision Score: {precision_score:.2f}%")
+        
+        return results
         
     except Exception as e:
         logger.error(f"Error running evaluation: {str(e)}")
@@ -285,9 +282,15 @@ def save_results(results, output_path: str):
         logger.info(f"Saving results to {output_path}")
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-        # Convert results to DataFrame
+        # Create results DataFrame
         results_df = pd.DataFrame([results])
         
+        # Load existing results if they exist
+        if os.path.exists(output_path):
+            existing_results = pd.read_csv(output_path)
+            results_df = pd.concat([existing_results, results_df], ignore_index=True)
+        
+        # Save all results
         results_df.to_csv(output_path, index=False)
         logger.info("Results saved successfully")
     except Exception as e:
