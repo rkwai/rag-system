@@ -100,29 +100,37 @@ class AgentEvaluator:
         # Get agent config
         self.agent_config = self.config['prompts'][f'{agent_type}_agent']
         
+        # Import metric functions directly
+        from utils.evaluation_metrics import (
+            faithfulness,
+            answer_relevancy,
+            context_relevancy,
+            harmfulness,
+            context_recall,
+            task_coordination
+        )
+        
         # Set up metrics based on agent type
-        self.metric_functions = {
-            'faithfulness': faithfulness,
-            'answer_relevancy': answer_relevancy,
-            'context_relevancy': context_relevancy
-        }
+        self.metric_functions = [
+            faithfulness,
+            answer_relevancy,
+            context_relevancy
+        ]
         
         # Add agent-specific metrics
         if agent_type == 'executive':
-            self.metric_functions.update({
-                'harmfulness': harmfulness,
-                'context_recall': context_recall,
-                'task_coordination': task_coordination
-            })
+            self.metric_functions.extend([
+                harmfulness,
+                context_recall,
+                task_coordination
+            ])
         elif agent_type == 'article_writing':
-            self.metric_functions.update({
-                'harmfulness': harmfulness
-            })
+            self.metric_functions.append(harmfulness)
         elif agent_type == 'research':
-            self.metric_functions.update({
-                'harmfulness': harmfulness,
-                'context_recall': context_recall
-            })
+            self.metric_functions.extend([
+                harmfulness,
+                context_recall
+            ])
         
         # Map agent types to their call functions
         self.agent_calls = {
@@ -415,36 +423,28 @@ class AgentEvaluator:
         try:
             self.logger.info("Running evaluation metrics")
             
-            # Get metric functions
-            metric_funcs = []
-            for metric in self.metric_functions:
-                if metric in self.metric_functions:
-                    metric_funcs.append(self.metric_functions[metric])
-                else:
-                    self.logger.warning(f"Metric function not found: {metric}")
-            
             # Run evaluation
             results = {}
-            for metric_func in metric_funcs:
+            for metric_func in self.metric_functions:
                 try:
                     # Get metric scores for each example
                     if metric_func.__name__ == 'task_coordination':
-                        scores = await asyncio.gather(*[
-                            metric_func(
+                        scores = []
+                        for _, row in eval_data.iterrows():
+                            score = await metric_func(
                                 row['answer'],
                                 row['ground_truth']['function_calls']
                             )
-                            for _, row in eval_data.iterrows()
-                        ])
+                            scores.append(score)
                     else:
-                        scores = await asyncio.gather(*[
-                            metric_func(row['answer'], row['context'])
-                            for _, row in eval_data.iterrows()
-                        ])
+                        scores = []
+                        for _, row in eval_data.iterrows():
+                            score = await metric_func(row['answer'], row['context'])
+                            scores.append(score)
                     
                     # Calculate average score
                     metric_name = metric_func.__name__
-                    results[metric_name] = sum(scores) / len(scores)
+                    results[metric_name] = sum(scores) / len(scores) if scores else 0.0
                     
                 except Exception as e:
                     self.logger.error(f"Error running metric {metric_func.__name__}: {str(e)}")
