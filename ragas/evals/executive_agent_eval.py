@@ -3,15 +3,52 @@ import pandas as pd
 import json
 import os
 import logging
+from logging.handlers import RotatingFileHandler
 from utils.agent_interface import call_executive_agent
 from utils.llm_interface import LLMInterface
 from datasets import Dataset
 
 # Configure logging
-logging.basicConfig(
-    level=os.getenv('LOG_LEVEL', 'INFO'),
-    format=os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
+os.makedirs(log_dir, exist_ok=True)
+
+# Create formatters and handlers
+file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# File handler for general logs
+file_handler = RotatingFileHandler(
+    os.path.join(log_dir, 'executive_agent.log'),
+    maxBytes=10*1024*1024,  # 10MB
+    backupCount=5
 )
+file_handler.setFormatter(file_formatter)
+file_handler.setLevel(logging.INFO)
+
+# File handler specifically for LLM interactions
+llm_file_handler = RotatingFileHandler(
+    os.path.join(log_dir, 'llm_interactions.log'),
+    maxBytes=10*1024*1024,  # 10MB
+    backupCount=5
+)
+llm_file_handler.setFormatter(file_formatter)
+llm_file_handler.setLevel(logging.INFO)
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(console_formatter)
+console_handler.setLevel(os.getenv('LOG_LEVEL', 'INFO'))
+
+# Configure root logger
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+root_logger.addHandler(file_handler)
+root_logger.addHandler(console_handler)
+
+# Configure LLM logger
+llm_logger = logging.getLogger('utils.llm_interface')
+llm_logger.addHandler(llm_file_handler)
+
 logger = logging.getLogger(__name__)
 
 def validate_agent_calls(response, expected_calls):

@@ -4,6 +4,7 @@ import google.generativeai as genai
 from typing import Dict, List, Any, Optional
 import logging
 from dotenv import load_dotenv
+import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -88,26 +89,79 @@ Available functions:
                               user_prompt: str,
                               available_functions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """Generate a response using Gemini"""
-        try:
-            formatted_prompt = self.format_messages(system_prompt, user_prompt, available_functions)
-            logger.info(f"Formatted prompt:\n{formatted_prompt}")
-            
-            response = await self.model.generate_content_async(formatted_prompt)
-            logger.info(f"Raw response:\n{response.text}")
-            
-            # Parse the response to extract function calls
-            parsed_response = self.parse_response(response.text)
-            logger.info(f"Parsed response:\n{parsed_response}")
-            
-            return {
-                'response': response.text,
-                'function_calls': parsed_response.get('function_calls', []),
-                'content': parsed_response.get('content', '')
-            }
-            
-        except Exception as e:
-            logger.error(f"Error generating response: {str(e)}")
-            raise
+        max_retries = 3
+        retry_delay = 1  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # For evaluation prompts, use a simpler prompt format
+                if "evaluate" in system_prompt.lower():
+                    formatted_prompt = f"""You are an evaluation assistant. Your task is to provide a numerical score between 0 and 1.
+DO NOT provide any explanation or additional text.
+ONLY respond with a single number between 0 and 1.
+
+{user_prompt}
+
+Score (0-1):"""
+                else:
+                    formatted_prompt = self.format_messages(system_prompt, user_prompt, available_functions)
+                
+                logger.info(f"Formatted prompt:\n{formatted_prompt}")
+                
+                response = await self.model.generate_content_async(formatted_prompt)
+                logger.info(f"Raw response:\n{response.text}")
+                
+                # For evaluation responses, extract just the numerical value
+                if "evaluate" in system_prompt.lower():
+                    try:
+                        # Extract the first number found in the response
+                        import re
+                        numbers = re.findall(r"0\.\d+|\d+\.?\d*", response.text)
+                        if numbers:
+                            score = float(numbers[0])
+                            score = min(max(score, 0), 1)  # Clamp between 0 and 1
+                            return {
+                                'response': str(score),
+                                'function_calls': [],
+                                'content': str(score)
+                            }
+                        return {
+                            'response': '0.5',
+                            'function_calls': [],
+                            'content': '0.5'
+                        }
+                    except Exception as e:
+                        logger.error(f"Error extracting numerical score: {str(e)}")
+                        return {
+                            'response': '0.5',
+                            'function_calls': [],
+                            'content': '0.5'
+                        }
+                
+                # For regular responses, parse function calls
+                parsed_response = self.parse_response(response.text)
+                logger.info(f"Parsed response:\n{parsed_response}")
+                
+                return {
+                    'response': response.text,
+                    'function_calls': parsed_response.get('function_calls', []),
+                    'content': parsed_response.get('content', '')
+                }
+                
+            except Exception as e:
+                if "429" in str(e) and attempt < max_retries - 1:
+                    logger.warning(f"Rate limit hit, retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+                logger.error(f"Error generating response: {str(e)}")
+                if "evaluate" in system_prompt.lower():
+                    return {
+                        'response': '0.5',
+                        'function_calls': [],
+                        'content': '0.5'
+                    }
+                raise
 
     def parse_response(self, response_text: str) -> Dict[str, Any]:
         """Parse Gemini's response to extract function calls and content"""
