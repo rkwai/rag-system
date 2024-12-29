@@ -1,0 +1,2 @@
+timestamp,num_examples,faithfulness_score,answer_relevancy_score,context_relevancy_score,function_calls_accuracy
+2024-12-28 23:33:07.794698,3,75.0,75.0,75.0,33.33333333333333

@@ -1,2 +1,2 @@
-agent_calls_accuracy,task_coordination_accuracy,faithfulness,answer_relevancy,context_precision
-0.3333333333333333,0.3333333333333333,0.0,0.0,0.0
+timestamp,num_examples,faithfulness_score,answer_relevancy_score,context_relevancy_score,task_coordination_score,agent_calls_accuracy,task_coordination_accuracy
+2024-12-28 23:35:13.582345,3,75.0,75.0,75.0,75.0,33.33333333333333,0.0
