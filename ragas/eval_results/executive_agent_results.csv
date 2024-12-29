@@ -1,2 +1,3 @@
-timestamp,num_examples,faithfulness_score,answer_relevancy_score,context_relevancy_score,task_coordination_score,agent_calls_accuracy,task_coordination_accuracy
-2024-12-28 23:35:13.582345,3,75.0,75.0,75.0,75.0,33.33333333333333,0.0
+timestamp,num_examples,faithfulness_score,answer_relevancy_score,context_relevancy_score,task_coordination_score,agent_calls_accuracy,task_coordination_accuracy,harmfulness_score,context_recall_score
+2024-12-28 23:35:13.582345,3,75.0,75.0,75.0,75.0,33.33333333333333,0.0,,
+2024-12-28 23:42:36.484612,3,75.0,75.0,75.0,75.0,0.0,0.0,25.0,75.0

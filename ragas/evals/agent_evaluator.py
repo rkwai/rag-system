@@ -86,42 +86,198 @@ async def evaluate(data: pd.DataFrame, metrics: List[Any], llm=None) -> Dict[str
     return results
 
 class AgentEvaluator:
+    """Class to evaluate agent performance"""
+
     def __init__(self, agent_type: str):
-        """Initialize evaluator for specific agent type"""
+        """Initialize evaluator with agent type"""
         self.agent_type = agent_type
-        self.logger = setup_logger(agent_type)
+        self.llm = LLMInterface()
         
-        # Get agent config from prompts section
-        self.agent_config = config['prompts'][f'{agent_type}_agent']
+        # Load config
+        with open("config/config.yaml", 'r') as f:
+            self.config = yaml.safe_load(f)
         
-        # Get base metrics from config
-        self.metrics = config['llm']['prompts']['evaluation']['metrics']
+        # Get agent config
+        self.agent_config = self.config['prompts'][f'{agent_type}_agent']
         
-        # Add agent-specific metrics if they exist
-        agent_specific_metrics = config['llm']['prompts']['evaluation'].get(f'{agent_type}_agent', [])
-        self.metrics.extend(agent_specific_metrics)
-        
-        # Map metrics to functions
+        # Set up metrics based on agent type
         self.metric_functions = {
             'faithfulness': faithfulness,
             'answer_relevancy': answer_relevancy,
-            'context_relevancy': context_relevancy,
-            'task_coordination': task_coordination,
-            'harmfulness': harmfulness,
-            'context_recall': context_recall
+            'context_relevancy': context_relevancy
         }
+        
+        # Add agent-specific metrics
+        if agent_type == 'executive':
+            self.metric_functions.update({
+                'harmfulness': harmfulness,
+                'context_recall': context_recall,
+                'task_coordination': task_coordination
+            })
+        elif agent_type == 'article_writing':
+            self.metric_functions.update({
+                'harmfulness': harmfulness
+            })
+        elif agent_type == 'research':
+            self.metric_functions.update({
+                'harmfulness': harmfulness,
+                'context_recall': context_recall
+            })
         
         # Map agent types to their call functions
         self.agent_calls = {
-            'email': call_email_agent,
-            'appointment': call_appointment_agent,
-            'article_writing': call_article_writing_agent,
-            'research': call_research_agent,
-            'executive': call_executive_agent
+            'email': self.call_email_agent,
+            'appointment': self.call_appointment_agent,
+            'article_writing': self.call_article_writing_agent,
+            'research': self.call_research_agent,
+            'executive': self.call_executive_agent
         }
-        
         self.agent_call = self.agent_calls[agent_type]
-    
+        
+        # Create directories if they don't exist
+        self.log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
+        self.results_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'eval_results')
+        os.makedirs(self.log_dir, exist_ok=True)
+        os.makedirs(self.results_dir, exist_ok=True)
+        
+        # Set up logging
+        self.logger = logging.getLogger(f'{agent_type}_agent')
+        self.logger.setLevel(logging.INFO)
+        
+        # Add file handler
+        log_file = os.path.join(self.log_dir, f'{agent_type}_agent.log')
+        fh = logging.FileHandler(log_file)
+        fh.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+        
+        # Add console handler
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        ch.setFormatter(formatter)
+        self.logger.addHandler(ch)
+
+    async def call_email_agent(self, query: str, context: str) -> Dict[str, Any]:
+        """Call email agent with query and context"""
+        try:
+            # Convert functions dict to list format
+            functions = []
+            for name, spec in self.agent_config['functions'].items():
+                func = {
+                    'name': name,
+                    'description': spec['description'],
+                    'parameters': spec['parameters']
+                }
+                functions.append(func)
+            
+            response = await self.llm.generate_response(
+                system_prompt=self.agent_config['instruction'],
+                user_prompt=query,
+                context=context,
+                available_functions=functions
+            )
+            return response
+        except Exception as e:
+            self.logger.error(f"Error calling email agent: {str(e)}")
+            raise
+
+    async def call_appointment_agent(self, query: str, context: str) -> Dict[str, Any]:
+        """Call appointment agent with query and context"""
+        try:
+            # Convert functions dict to list format
+            functions = []
+            for name, spec in self.agent_config['functions'].items():
+                func = {
+                    'name': name,
+                    'description': spec['description'],
+                    'parameters': spec['parameters']
+                }
+                functions.append(func)
+            
+            response = await self.llm.generate_response(
+                system_prompt=self.agent_config['instruction'],
+                user_prompt=query,
+                context=context,
+                available_functions=functions
+            )
+            return response
+        except Exception as e:
+            self.logger.error(f"Error calling appointment agent: {str(e)}")
+            raise
+
+    async def call_article_writing_agent(self, query: str, context: str) -> Dict[str, Any]:
+        """Call article writing agent with query and context"""
+        try:
+            # Convert functions dict to list format
+            functions = []
+            for name, spec in self.agent_config['functions'].items():
+                func = {
+                    'name': name,
+                    'description': spec['description'],
+                    'parameters': spec['parameters']
+                }
+                functions.append(func)
+            
+            response = await self.llm.generate_response(
+                system_prompt=self.agent_config['instruction'],
+                user_prompt=query,
+                context=context,
+                available_functions=functions
+            )
+            return response
+        except Exception as e:
+            self.logger.error(f"Error calling article writing agent: {str(e)}")
+            raise
+
+    async def call_research_agent(self, query: str, context: str) -> Dict[str, Any]:
+        """Call research agent with query and context"""
+        try:
+            # Convert functions dict to list format
+            functions = []
+            for name, spec in self.agent_config['functions'].items():
+                func = {
+                    'name': name,
+                    'description': spec['description'],
+                    'parameters': spec['parameters']
+                }
+                functions.append(func)
+            
+            response = await self.llm.generate_response(
+                system_prompt=self.agent_config['instruction'],
+                user_prompt=query,
+                context=context,
+                available_functions=functions
+            )
+            return response
+        except Exception as e:
+            self.logger.error(f"Error calling research agent: {str(e)}")
+            raise
+
+    async def call_executive_agent(self, query: str, context: str) -> Dict[str, Any]:
+        """Call executive agent with query and context"""
+        try:
+            # Convert functions dict to list format
+            functions = []
+            for name, spec in self.agent_config['functions'].items():
+                func = {
+                    'name': name,
+                    'description': spec['description'],
+                    'parameters': spec['parameters']
+                }
+                functions.append(func)
+            
+            response = await self.llm.generate_response(
+                system_prompt=self.agent_config['instruction'],
+                user_prompt=query,
+                context=context,
+                available_functions=functions
+            )
+            return response
+        except Exception as e:
+            self.logger.error(f"Error calling executive agent: {str(e)}")
+            raise
+
     def validate_agent_calls(self, response: Dict[str, Any], expected_calls: List[str]) -> bool:
         """Validate that the agent made the correct function calls"""
         try:
@@ -263,7 +419,7 @@ class AgentEvaluator:
             
             # Get metric functions
             metric_funcs = []
-            for metric in self.metrics:
+            for metric in self.metric_functions:
                 if metric in self.metric_functions:
                     metric_funcs.append(self.metric_functions[metric])
                 else:
@@ -308,6 +464,12 @@ class AgentEvaluator:
             for key, value in base_results.items():
                 if key != 'timestamp' and key != 'num_examples':
                     self.logger.info(f"{key.replace('_', ' ').title()}: {value:.2f}%")
+            
+            # Save results to CSV
+            results_file = os.path.join(self.results_dir, f'{self.agent_type}_agent_results.csv')
+            self.logger.info(f"Saving results to {results_file}")
+            pd.DataFrame([base_results]).to_csv(results_file, index=False)
+            self.logger.info("Results saved successfully")
             
             return base_results
         except Exception as e:

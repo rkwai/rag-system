@@ -16,8 +16,8 @@ class LLMInterface:
     def __init__(self, config_path: str = "config/config.yaml"):
         """Initialize LLM interface with configuration"""
         with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
-            self.config = config['llm']
+            self.config = yaml.safe_load(f)
+            self.llm_config = self.config['llm']
             self.prompts = self.config['prompts']
         
         # Configure Gemini
@@ -28,10 +28,8 @@ class LLMInterface:
         
         # Set up the model
         generation_config = {
-            'temperature': float(os.getenv('TEMPERATURE', self.config['temperature'])),
-            'top_p': float(os.getenv('TOP_P', self.config['top_p'])),
-            'top_k': int(os.getenv('TOP_K', self.config['top_k'])),
-            'max_output_tokens': int(os.getenv('MAX_OUTPUT_TOKENS', self.config['max_output_tokens'])),
+            'temperature': float(os.getenv('TEMPERATURE', self.llm_config.get('temperature', 0.7))),
+            'max_output_tokens': int(os.getenv('MAX_TOKENS', self.llm_config.get('max_tokens', 1024))),
         }
         
         safety_settings = [
@@ -39,10 +37,10 @@ class LLMInterface:
                 "category": setting,
                 "threshold": "BLOCK_NONE"
             }
-            for setting in self.config['safety_settings']
+            for setting in self.llm_config.get('safety_settings', [])
         ]
         
-        model_name = os.getenv('MODEL_NAME', self.config['model_name'])
+        model_name = os.getenv('MODEL_NAME', self.llm_config.get('model', 'gemini-2.0-flash-exp'))
         self.model = genai.GenerativeModel(
             model_name=model_name,
             generation_config=generation_config,
@@ -64,17 +62,42 @@ class LLMInterface:
 
     def format_messages(self, system: str, user: str, context: Optional[str] = None, functions: Optional[List[Dict[str, Any]]] = None) -> str:
         """Format messages for Gemini's chat format"""
-        format_vars = {
-            "system": system,
-            "user": user,
-            "context": context if context else "No additional context provided.",
-            "functions": self.format_function_calls(functions) if functions else ""
-        }
+        # Build the prompt parts
+        prompt_parts = []
         
-        return "\n\n".join(
-            line.format(**format_vars) 
-            for line in self.prompts['message_format']
-        )
+        # Add system context
+        prompt_parts.append(self.prompts['system_context'])
+        
+        # Add system prompt
+        prompt_parts.append(system)
+        
+        # Add function definitions if provided
+        if functions:
+            prompt_parts.append("Available functions:")
+            for func in functions:
+                prompt_parts.append(f"\n{func['name']}")
+                prompt_parts.append(f"Description: {func['description']}")
+                prompt_parts.append("Parameters:")
+                for param_name, param_info in func['parameters'].items():
+                    prompt_parts.append(f"  - {param_name}: {param_info['type']} - {param_info['description']}")
+                prompt_parts.append("")
+            
+            prompt_parts.append("When calling functions, use this format:")
+            prompt_parts.append("FUNCTION_CALL: <function_name>")
+            prompt_parts.append("ARGS:")
+            prompt_parts.append("- <param_name>: <param_value>")
+            prompt_parts.append("END_FUNCTION_CALL")
+            prompt_parts.append("")
+        
+        # Add context if provided
+        if context:
+            prompt_parts.append(f"Context: {context}")
+        
+        # Add user prompt
+        prompt_parts.append(f"User request: {user}")
+        
+        # Join all parts with newlines
+        return "\n\n".join(prompt_parts)
 
     def parse_evaluation_response(self, response_text: str) -> float:
         """Parse evaluation response to extract numerical score"""
@@ -115,14 +138,26 @@ class LLMInterface:
             try:
                 # For evaluation prompts, use a simpler prompt format
                 if "evaluate" in system_prompt.lower():
-                    formatted_prompt = self.prompts['evaluation'].format(user_prompt=user_prompt)
+                    formatted_prompt = f"{system_prompt}\n\n{user_prompt}"
                 else:
-                    formatted_prompt = self.format_messages(system_prompt, user_prompt, context, available_functions)
+                    try:
+                        formatted_prompt = self.format_messages(system_prompt, user_prompt, context, available_functions)
+                    except Exception as e:
+                        logger.error(f"Error formatting messages: {str(e)}")
+                        logger.error(f"system_prompt: {system_prompt}")
+                        logger.error(f"user_prompt: {user_prompt}")
+                        logger.error(f"context: {context}")
+                        logger.error(f"available_functions: {available_functions}")
+                        raise
                 
                 logger.info(f"Formatted prompt:\n{formatted_prompt}")
                 
-                response = await self.model.generate_content_async(formatted_prompt)
-                logger.info(f"Raw response:\n{response.text}")
+                try:
+                    response = await self.model.generate_content_async(formatted_prompt)
+                    logger.info(f"Raw response:\n{response.text}")
+                except Exception as e:
+                    logger.error(f"Error generating content: {str(e)}")
+                    raise
                 
                 # For evaluation responses, extract just the numerical value
                 if "evaluate" in system_prompt.lower():
@@ -134,8 +169,13 @@ class LLMInterface:
                     }
                 
                 # For regular responses, parse function calls
-                parsed_response = self.parse_response(response.text)
-                logger.info(f"Parsed response:\n{parsed_response}")
+                try:
+                    parsed_response = self.parse_response(response.text)
+                    logger.info(f"Parsed response:\n{parsed_response}")
+                except Exception as e:
+                    logger.error(f"Error parsing response: {str(e)}")
+                    logger.error(f"Response text: {response.text}")
+                    raise
                 
                 return {
                     'response': response.text,
@@ -215,7 +255,10 @@ class LLMInterface:
             
         except Exception as e:
             logger.error(f"Error parsing response: {str(e)}")
-            raise
+            return {
+                'function_calls': [],
+                'content': response_text
+            }
 
     def validate_function_call(self, function_call: Dict[str, Any], function_spec: Dict[str, Any]) -> bool:
         """Validate a function call against its specification"""
