@@ -328,9 +328,10 @@ class AgentEvaluator:
             return False
 
     def load_data(self, file_path: str) -> pd.DataFrame:
-        """Load evaluation data from JSONL file"""
+        """Load evaluation data from JSON file"""
         try:
             self.logger.info(f"Loading evaluation data from {file_path}")
+            
             if not os.path.exists(file_path):
                 self.logger.error(f"Evaluation data file not found: {file_path}")
                 # Create example data for testing
@@ -345,15 +346,12 @@ class AgentEvaluator:
                 ]
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 with open(file_path, 'w') as f:
-                    for item in example_data:
-                        f.write(json.dumps(item) + '\n')
+                    json.dump(example_data, f, indent=2)
                 self.logger.info(f"Created example evaluation data in {file_path}")
                 return pd.DataFrame(example_data)
-                
-            data = []
+            
             with open(file_path, 'r') as f:
-                for line in f:
-                    data.append(json.loads(line))
+                data = json.load(f)
             return pd.DataFrame(data)
         except Exception as e:
             self.logger.error(f"Error loading data: {str(e)}")
@@ -430,10 +428,19 @@ class AgentEvaluator:
             for metric_func in metric_funcs:
                 try:
                     # Get metric scores for each example
-                    scores = await asyncio.gather(*[
-                        metric_func(row['answer'], row['context'])
-                        for _, row in eval_data.iterrows()
-                    ])
+                    if metric_func.__name__ == 'task_coordination':
+                        scores = await asyncio.gather(*[
+                            metric_func(
+                                row['answer'],
+                                row['ground_truth']['function_calls']
+                            )
+                            for _, row in eval_data.iterrows()
+                        ])
+                    else:
+                        scores = await asyncio.gather(*[
+                            metric_func(row['answer'], row['context'])
+                            for _, row in eval_data.iterrows()
+                        ])
                     
                     # Calculate average score
                     metric_name = metric_func.__name__
@@ -502,8 +509,8 @@ class AgentEvaluator:
         try:
             self.logger.info(f"Starting {self.agent_type} agent evaluation")
             
-            # Load and process data
-            eval_data = self.load_data(f"data/{self.agent_type}_agent_eval_data.jsonl")
+            # Load and process data (update file extension)
+            eval_data = self.load_data(f"data/{self.agent_type}_agent_eval_data.json")
             eval_data = await self.generate_answers(eval_data)
             
             # Run evaluation

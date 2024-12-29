@@ -1,2 +1,3 @@
 timestamp,num_examples,faithfulness_score,answer_relevancy_score,context_relevancy_score,harmfulness_score,context_recall_score,function_calls_accuracy
-2024-12-28 23:42:32.115845,3,75.0,75.0,75.0,25.0,75.0,0.0
+2024-12-29 00:26:20.002289,3,0.0,0.0,0.0,0.0,31.666666666666664,0.0
+2024-12-29 00:26:20.002289,3,0.0,0.0,0.0,0.0,31.666666666666664,0.0

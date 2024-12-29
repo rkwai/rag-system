@@ -1,3 +1,0 @@
-{"query": "Schedule a team meeting for next week", "context": "Team availability: Monday and Wednesday afternoons are open. Need to discuss Q4 planning.", "ground_truth": {"function_calls": ["check_availability", "schedule_meeting"]}}
-{"query": "Find a time slot for the project review", "context": "Need 2-hour slot between Tuesday-Thursday. Attendees: John, Sarah, Mike.", "ground_truth": {"function_calls": ["check_availability"]}}
-{"query": "Set up the quarterly review meeting", "context": "All department heads must attend. Duration: 3 hours. Preferred time: Morning slots.", "ground_truth": {"function_calls": ["check_availability", "schedule_meeting"]}} 
