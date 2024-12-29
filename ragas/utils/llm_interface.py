@@ -5,6 +5,7 @@ from typing import Dict, List, Any, Optional
 import logging
 from dotenv import load_dotenv
 import asyncio
+import re
 
 # Load environment variables
 load_dotenv()
@@ -15,7 +16,9 @@ class LLMInterface:
     def __init__(self, config_path: str = "config/config.yaml"):
         """Initialize LLM interface with configuration"""
         with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)['llm']
+            config = yaml.safe_load(f)
+            self.config = config['llm']
+            self.prompts = self.config['prompts']
         
         # Configure Gemini
         api_key = os.getenv('GOOGLE_API_KEY')
@@ -48,45 +51,61 @@ class LLMInterface:
 
     def format_function_calls(self, functions: List[Dict[str, Any]]) -> str:
         """Format function definitions for Gemini's context"""
-        formatted = """Available functions:
-
-When you need to call a function, use the following format:
-FUNCTION_CALL: <function_name>
-ARGS:
-- <arg_name>: <arg_value>
-END_FUNCTION_CALL
-
-IMPORTANT: Make sure to call ALL necessary functions to complete the task. Do not stop after the first function call.
-After each function call, explain what you'll do next and make the next function call.
-
-Available functions:
-"""
+        functions_str = ""
         for func in functions:
-            formatted += f"\n{func['name']}\n"
-            formatted += f"Description: {func['description']}\n"
-            formatted += "Parameters:\n"
+            functions_str += f"\n{func['name']}\n"
+            functions_str += f"Description: {func['description']}\n"
+            functions_str += "Parameters:\n"
             for param_name, param_info in func['parameters'].items():
-                formatted += f"  - {param_name}: {param_info['type']} - {param_info['description']}\n"
-            formatted += "\n"
-        return formatted
+                functions_str += f"  - {param_name}: {param_info['type']} - {param_info['description']}\n"
+            functions_str += "\n"
+        
+        return self.prompts['function_format'].format(functions=functions_str)
 
-    def format_messages(self, system: str, user: str, functions: Optional[List[Dict[str, Any]]] = None) -> str:
+    def format_messages(self, system: str, user: str, context: Optional[str] = None, functions: Optional[List[Dict[str, Any]]] = None) -> str:
         """Format messages for Gemini's chat format"""
-        context = [
-            system,
-            "Important: When you need to call functions, use them explicitly with the FUNCTION_CALL format.",
-            "Make sure to call ALL necessary functions to complete the task. Do not stop after the first function call.",
-            "After each function call, explain what you'll do next and make the next function call."
-        ]
-        if functions:
-            context.append(self.format_function_calls(functions))
-        context.append(f"User request: {user}")
-        context.append("\nProvide your response and make any necessary function calls using the specified format.")
-        return "\n\n".join(context)
+        format_vars = {
+            "system": system,
+            "user": user,
+            "context": context if context else "No additional context provided.",
+            "functions": self.format_function_calls(functions) if functions else ""
+        }
+        
+        return "\n\n".join(
+            line.format(**format_vars) 
+            for line in self.prompts['message_format']
+        )
+
+    def parse_evaluation_response(self, response_text: str) -> float:
+        """Parse evaluation response to extract numerical score"""
+        try:
+            # Clean up the response text
+            cleaned_text = response_text.strip()
+            
+            # If it's a single number, try to parse it directly
+            try:
+                score = float(cleaned_text)
+                return min(max(score, 0), 1)  # Clamp between 0 and 1
+            except ValueError:
+                pass
+            
+            # Extract the first number found in the response
+            numbers = re.findall(r"0\.\d+|\d+\.?\d*", cleaned_text)
+            if numbers:
+                score = float(numbers[0])
+                return min(max(score, 0), 1)  # Clamp between 0 and 1
+            
+            logger.warning(f"No valid numerical score found in response: {cleaned_text}")
+            return 0  # Default to 0 if no valid number found
+            
+        except Exception as e:
+            logger.error(f"Error parsing evaluation response: {str(e)}")
+            return 0
 
     async def generate_response(self, 
                               system_prompt: str,
                               user_prompt: str,
+                              context: Optional[str] = None,
                               available_functions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """Generate a response using Gemini"""
         max_retries = 3
@@ -96,15 +115,9 @@ Available functions:
             try:
                 # For evaluation prompts, use a simpler prompt format
                 if "evaluate" in system_prompt.lower():
-                    formatted_prompt = f"""You are an evaluation assistant. Your task is to provide a numerical score between 0 and 1.
-DO NOT provide any explanation or additional text.
-ONLY respond with a single number between 0 and 1.
-
-{user_prompt}
-
-Score (0-1):"""
+                    formatted_prompt = self.prompts['evaluation'].format(user_prompt=user_prompt)
                 else:
-                    formatted_prompt = self.format_messages(system_prompt, user_prompt, available_functions)
+                    formatted_prompt = self.format_messages(system_prompt, user_prompt, context, available_functions)
                 
                 logger.info(f"Formatted prompt:\n{formatted_prompt}")
                 
@@ -113,30 +126,12 @@ Score (0-1):"""
                 
                 # For evaluation responses, extract just the numerical value
                 if "evaluate" in system_prompt.lower():
-                    try:
-                        # Extract the first number found in the response
-                        import re
-                        numbers = re.findall(r"0\.\d+|\d+\.?\d*", response.text)
-                        if numbers:
-                            score = float(numbers[0])
-                            score = min(max(score, 0), 1)  # Clamp between 0 and 1
-                            return {
-                                'response': str(score),
-                                'function_calls': [],
-                                'content': str(score)
-                            }
-                        return {
-                            'response': '0.5',
-                            'function_calls': [],
-                            'content': '0.5'
-                        }
-                    except Exception as e:
-                        logger.error(f"Error extracting numerical score: {str(e)}")
-                        return {
-                            'response': '0.5',
-                            'function_calls': [],
-                            'content': '0.5'
-                        }
+                    score = self.parse_evaluation_response(response.text)
+                    return {
+                        'response': str(score),
+                        'function_calls': [],
+                        'content': str(score)
+                    }
                 
                 # For regular responses, parse function calls
                 parsed_response = self.parse_response(response.text)
@@ -157,9 +152,9 @@ Score (0-1):"""
                 logger.error(f"Error generating response: {str(e)}")
                 if "evaluate" in system_prompt.lower():
                     return {
-                        'response': '0.5',
+                        'response': '0',
                         'function_calls': [],
-                        'content': '0.5'
+                        'content': '0'
                     }
                 raise
 

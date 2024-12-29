@@ -3,8 +3,15 @@ from ragas.metrics import faithfulness, answer_relevancy, context_relevancy  # I
 import pandas as pd
 import json
 import os
+import yaml
 import logging
 from utils.agent_interface import call_appointment_agent
+from utils.llm_interface import LLMInterface
+import asyncio
+
+# Load config
+with open("config/config.yaml", 'r') as f:
+    config = yaml.safe_load(f)
 
 # Configure logging
 logging.basicConfig(
@@ -13,57 +20,57 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def validate_function_calls(response, expected_calls):
+async def validate_function_calls(response, expected_calls) -> float:
     """Validate that the appointment agent made the correct function calls"""
     try:
         response_calls = response.get('function_calls', [])
         
-        # Check if all expected function calls are present in correct order
-        if len(response_calls) != len(expected_calls):
-            logger.error(f"Number of function calls mismatch. Expected {len(expected_calls)}, got {len(response_calls)}")
-            return False
+        # Get prompt from config
+        prompt = config['prompts']['evaluation']['function_calls']['instruction'].format(
+            expected_calls=json.dumps(expected_calls, indent=2),
+            actual_calls=json.dumps(response_calls, indent=2)
+        )
+
+        # Get LLM response
+        llm = LLMInterface()
+        response = await llm.generate_response(
+            system_prompt=config['prompts']['evaluation']['system_prompt'],
+            user_prompt=prompt
+        )
+        
+        # Extract just the numerical score
+        score_text = response.get('content', '0.0').strip()
+        return float(score_text)
             
-        for expected_call, actual_call in zip(expected_calls, response_calls):
-            # Check function name
-            if expected_call['name'] != actual_call['name']:
-                logger.error(f"Function name mismatch: expected {expected_call['name']}, got {actual_call['name']}")
-                return False
-                
-            # Check function arguments
-            expected_args = expected_call['args']
-            actual_args = actual_call['args']
-            
-            # Validate based on function type
-            if expected_call['name'] == 'check_availability':
-                if not all(key in actual_args for key in ['start_date', 'end_date', 'time_range', 'duration']):
-                    logger.error("Missing required availability check fields")
-                    return False
-                    
-            elif expected_call['name'] == 'find_common_availability':
-                if not all(key in actual_args for key in ['attendees', 'duration']):
-                    logger.error("Missing required common availability fields")
-                    return False
-                if not isinstance(actual_args['attendees'], list):
-                    logger.error("'attendees' field should be a list")
-                    return False
-                    
-            elif expected_call['name'] == 'book_meeting_room':
-                if not all(key in actual_args for key in ['room', 'date', 'start_time', 'duration']):
-                    logger.error("Missing required room booking fields")
-                    return False
-                    
-            elif expected_call['name'] == 'create_meeting':
-                if not all(key in actual_args for key in ['title', 'start_time', 'duration', 'attendees']):
-                    logger.error("Missing required meeting creation fields")
-                    return False
-                if not isinstance(actual_args['attendees'], list):
-                    logger.error("'attendees' field should be a list")
-                    return False
-                    
-        return True
     except Exception as e:
         logger.error(f"Error validating function calls: {str(e)}")
-        return False
+        return 0.0
+
+async def validate_task_coordination(response, expected_sequence) -> float:
+    """Validate task coordination and dependencies"""
+    try:
+        actual_sequence = [call['name'] for call in response.get('function_calls', [])]
+        
+        # Get prompt from config
+        prompt = config['prompts']['evaluation']['task_coordination']['instruction'].format(
+            expected_sequence=json.dumps(expected_sequence, indent=2),
+            actual_sequence=json.dumps(actual_sequence, indent=2)
+        )
+
+        # Get LLM response
+        llm = LLMInterface()
+        response = await llm.generate_response(
+            system_prompt=config['prompts']['evaluation']['system_prompt'],
+            user_prompt=prompt
+        )
+        
+        # Extract just the numerical score
+        score_text = response.get('content', '0.0').strip()
+        return float(score_text)
+            
+    except Exception as e:
+        logger.error(f"Error validating task coordination: {str(e)}")
+        return 0.0
 
 def load_data(file_path: str) -> pd.DataFrame:
     """Load evaluation data from JSONL file"""
@@ -84,31 +91,35 @@ def load_data(file_path: str) -> pd.DataFrame:
         logger.error(f"Error loading data from {file_path}: {str(e)}")
         raise
 
-def generate_answers(data: pd.DataFrame) -> pd.DataFrame:
+async def generate_answers(data: pd.DataFrame) -> pd.DataFrame:
     """Generate answers using the appointment agent"""
     try:
         logger.info("Generating answers using appointment agent")
         data['answer'] = data['query'].apply(call_appointment_agent)
         
-        # Validate function calls
-        data['function_calls_valid'] = data.apply(
-            lambda row: validate_function_calls(row['answer'], row['ground_truth']['function_calls']), 
-            axis=1
-        )
+        # Validate function calls and task coordination
+        function_calls_scores = await asyncio.gather(*[
+            validate_function_calls(row['answer'], row['ground_truth']['function_calls'])
+            for _, row in data.iterrows()
+        ])
+        data['function_calls_score'] = function_calls_scores
+        
+        task_coordination_scores = await asyncio.gather(*[
+            validate_task_coordination(row['answer'], row['ground_truth']['function_calls'])
+            for _, row in data.iterrows()
+        ])
+        data['task_coordination_score'] = task_coordination_scores
         
         return data
     except Exception as e:
         logger.error(f"Error generating answers: {str(e)}")
         raise
 
-def run_evaluation(eval_data: pd.DataFrame):
+async def run_evaluation(eval_data: pd.DataFrame):
     """Run the evaluation metrics"""
     try:
         logger.info("Running evaluation metrics")
         metrics = [faithfulness, answer_relevancy, context_relevancy]
-        
-        # Add custom metric for function calls
-        eval_data['function_calls_score'] = eval_data['function_calls_valid'].astype(float)
         
         results = evaluate(
             eval_data,
@@ -116,8 +127,9 @@ def run_evaluation(eval_data: pd.DataFrame):
             llm=None
         )
         
-        # Add custom metric to results
+        # Add custom metrics to results
         results['function_calls_accuracy'] = eval_data['function_calls_score'].mean()
+        results['task_coordination_accuracy'] = eval_data['task_coordination_score'].mean()
         
         return results
     except Exception as e:
@@ -131,8 +143,9 @@ def save_results(results, output_path: str):
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         results_df = results.to_pandas()
         
-        # Add custom metric to the results
+        # Add custom metrics to the results
         results_df['function_calls_accuracy'] = results.get('function_calls_accuracy', 0)
+        results_df['task_coordination_accuracy'] = results.get('task_coordination_accuracy', 0)
         
         results_df.to_csv(output_path, index=False)
         logger.info("Results saved successfully")
@@ -140,16 +153,16 @@ def save_results(results, output_path: str):
         logger.error(f"Error saving results: {str(e)}")
         raise
 
-if __name__ == "__main__":
+async def main():
     try:
         logger.info("Starting appointment agent evaluation")
         
         # Load and process data
         eval_data = load_data("data/appointment_agent_eval_data.jsonl")
-        eval_data = generate_answers(eval_data)
+        eval_data = await generate_answers(eval_data)
         
         # Run evaluation
-        results = run_evaluation(eval_data)
+        results = await run_evaluation(eval_data)
         
         # Save results
         output_path = "eval_results/appointment_agent_results.csv"
@@ -157,8 +170,12 @@ if __name__ == "__main__":
         
         # Log accuracy metrics
         logger.info(f"Function Calls Accuracy: {results.get('function_calls_accuracy', 0):.2%}")
+        logger.info(f"Task Coordination Accuracy: {results.get('task_coordination_accuracy', 0):.2%}")
         logger.info("Appointment agent evaluation completed successfully")
         
     except Exception as e:
         logger.error(f"Appointment agent evaluation failed: {str(e)}")
-        raise 
+        raise
+
+if __name__ == "__main__":
+    asyncio.run(main()) 

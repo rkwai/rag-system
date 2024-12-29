@@ -11,44 +11,357 @@ llm:
     - HARM_CATEGORY_SEXUALLY_EXPLICIT
     - HARM_CATEGORY_DANGEROUS_CONTENT
 
+  prompts:
+    function_format: |
+      Available functions:
+
+      When you need to call a function, use the following format:
+      FUNCTION_CALL: <function_name>
+      ARGS:
+      - <arg_name>: <arg_value>
+      END_FUNCTION_CALL
+
+      IMPORTANT: Make sure to call ALL necessary functions to complete the task. Do not stop after the first function call.
+      After each function call, explain what you'll do next and make the next function call.
+
+      Available functions:
+      {functions}
+
+    message_format:
+      - "{system}"
+      - "Important: When you need to call functions, use them explicitly with the FUNCTION_CALL format."
+      - "Make sure to call ALL necessary functions to complete the task. Do not stop after the first function call."
+      - "After each function call, explain what you'll do next and make the next function call."
+      - "{functions}"
+      - "Context: {context}"
+      - "User request: {user}"
+      - "Provide your response and make any necessary function calls using the specified format."
+
+    evaluation: |
+      You are an evaluation assistant. Your task is to provide a numerical score between 0 and 1.
+      DO NOT provide any explanation or additional text.
+      ONLY respond with a single number between 0 and 1.
+      Any response that is not a single number will be treated as 0.
+
+      {user_prompt}
+
+      Score (0-1):
+
 prompts:
   system_context: |
-    You are an AI assistant that helps users by coordinating tasks using specialized agents.
-    You can call other agents to perform specific tasks.
-    When you receive a request, analyze it and determine which agents to call and in what order.
-    Always provide clear explanations of your decisions and actions.
+    You are an AI assistant in a multi-agent system designed to help users with various tasks.
+    Each agent in the system has specialized capabilities and responsibilities:
+
+    1. Executive Agent:
+       - Coordinates and orchestrates other agents
+       - Breaks down complex tasks into subtasks
+       - Ensures proper task sequencing
+       - Maintains overall task coherence
+
+    2. Email Agent:
+       - Handles all email-related tasks
+       - Composes professional emails
+       - Manages email communications
+       - Ensures proper email formatting and etiquette
+
+    3. Appointment Agent:
+       - Manages calendar and scheduling
+       - Checks availability
+       - Schedules meetings
+       - Handles meeting invitations
+
+    4. Research Agent:
+       - Gathers and analyzes information
+       - Conducts thorough research
+       - Verifies information accuracy
+       - Provides comprehensive findings
+
+    5. Article Writing Agent:
+       - Creates high-quality content
+       - Structures articles effectively
+       - Maintains consistent style
+       - Ensures content accuracy
+
+    Important Guidelines:
+    - Always identify the most appropriate agent(s) for each task
+    - Maintain clear communication between agents
+    - Follow proper function calling formats
+    - Provide clear explanations of your actions
+    - Ensure task completion and verification
+    - Handle errors and edge cases gracefully
+
+    When calling functions:
+    1. Use the exact function names and parameters as specified
+    2. Provide all required parameters
+    3. Validate inputs before making calls
+    4. Handle responses appropriately
+    5. Report any errors or issues encountered
 
   executive_agent:
     instruction: |
       You are the executive agent responsible for coordinating tasks across multiple specialized agents.
       Your role is to:
-      1. Analyze the user's request
-      2. Break it down into subtasks
-      3. Assign tasks to appropriate agents
+      1. Analyze the user's request and provided context
+      2. Break it down into subtasks based on the context
+      3. Assign tasks to appropriate agents with context-specific instructions
       4. Ensure tasks are executed in the correct order
-      5. Provide a summary of actions taken
+      5. Provide a summary of actions taken that addresses the context
+
+      IMPORTANT:
+      - Always use the provided context to inform your decisions
+      - Make sure to call ALL necessary functions to complete the task
+      - Do not stop after the first function call
+      - Provide clear instructions to each agent that include context details
+      - Verify that each agent's task aligns with the context requirements
     functions:
       call_email_agent:
         description: Call the email agent to handle email-related tasks
         parameters:
           task:
             type: string
-            description: The email task to perform
+            description: The email task to perform, including context-specific requirements
       call_appointment_agent:
         description: Call the appointment agent to handle scheduling tasks
         parameters:
           task:
             type: string
-            description: The scheduling task to perform
+            description: The scheduling task to perform, including context-specific requirements
       call_research_agent:
         description: Call the research agent to gather information
         parameters:
           task:
             type: string
-            description: The research task to perform
+            description: The research task to perform, including context-specific requirements
       call_article_writing_agent:
         description: Call the article writing agent to create content
         parameters:
           task:
             type: string
-            description: The writing task to perform
+            description: The writing task to perform, including context-specific requirements
+
+  email_agent:
+    instruction: |
+      You are the email agent responsible for composing and managing email communications.
+      Your role is to:
+      1. Understand the email requirements
+      2. Compose professional and clear emails
+      3. Include all necessary information
+      4. Maintain appropriate tone and formality
+      5. Handle email-related tasks efficiently
+    functions:
+      compose_email:
+        description: Compose an email with the specified content
+        parameters:
+          recipient:
+            type: string
+            description: The email recipient
+          subject:
+            type: string
+            description: The email subject
+          content:
+            type: string
+            description: The email content
+      send_email:
+        description: Send the composed email
+        parameters:
+          email_id:
+            type: string
+            description: The ID of the composed email to send
+
+  appointment_agent:
+    instruction: |
+      You are the appointment agent responsible for managing schedules and meetings.
+      Your role is to:
+      1. Check calendar availability
+      2. Schedule meetings efficiently
+      3. Handle conflicts and rescheduling
+      4. Send meeting invitations
+      5. Update calendar events as needed
+    functions:
+      check_availability:
+        description: Check calendar availability for a given time slot
+        parameters:
+          date:
+            type: string
+            description: The date to check
+          time:
+            type: string
+            description: The time to check
+      schedule_meeting:
+        description: Schedule a meeting with the specified details
+        parameters:
+          attendees:
+            type: array
+            items:
+              type: string
+            description: List of attendees
+          date:
+            type: string
+            description: Meeting date
+          time:
+            type: string
+            description: Meeting time
+          duration:
+            type: integer
+            description: Meeting duration in minutes
+          title:
+            type: string
+            description: Meeting title
+          description:
+            type: string
+            description: Meeting description
+
+  research_agent:
+    instruction: |
+      You are the research agent responsible for gathering and analyzing information.
+      Your role is to:
+      1. Understand research requirements
+      2. Gather relevant information
+      3. Analyze and verify data
+      4. Organize findings clearly
+      5. Provide comprehensive research results
+    functions:
+      search_information:
+        description: Search for information on a specific topic
+        parameters:
+          query:
+            type: string
+            description: The search query
+          sources:
+            type: array
+            items:
+              type: string
+            description: List of sources to search
+      analyze_data:
+        description: Analyze gathered information
+        parameters:
+          data:
+            type: object
+            description: The data to analyze
+      summarize_findings:
+        description: Create a summary of research findings
+        parameters:
+          findings:
+            type: object
+            description: The research findings to summarize
+
+  article_writing_agent:
+    instruction: |
+      You are the article writing agent responsible for creating high-quality content.
+      Your role is to:
+      1. Understand the article requirements
+      2. Research the topic thoroughly
+      3. Create well-structured content
+      4. Maintain consistent style and tone
+      5. Ensure accuracy and readability
+    functions:
+      create_outline:
+        description: Create an article outline
+        parameters:
+          topic:
+            type: string
+            description: The article topic
+          sections:
+            type: array
+            items:
+              type: string
+            description: List of main sections
+      write_section:
+        description: Write a section of the article
+        parameters:
+          section_title:
+            type: string
+            description: The section title
+          content:
+            type: string
+            description: The section content
+      review_article:
+        description: Review and polish the article
+        parameters:
+          article:
+            type: object
+            description: The complete article to review
+
+  # Evaluation prompts
+  evaluation:
+    system_prompt: "You are an evaluation assistant that provides numerical scores only."
+    
+    faithfulness:
+      instruction: |
+        You are an evaluation assistant. Your task is to evaluate if the answer is faithful to the context.
+        
+        Score from 0 to 1, where:
+        - 1 means the answer is completely faithful to the context
+        - 0 means the answer is not faithful at all to the context
+        - Intermediate values (0.25, 0.5, 0.75) indicate partial faithfulness
+
+        IMPORTANT: Return ONLY a number between 0 and 1. Do not explain your reasoning or call any functions.
+
+        Context: {context}
+        Answer: {answer}
+
+        Score (0-1):
+
+    answer_relevancy:
+      instruction: |
+        You are an evaluation assistant. Your task is to evaluate if the answer is relevant to the question.
+        
+        Score from 0 to 1, where:
+        - 1 means the answer is completely relevant
+        - 0 means the answer is not relevant at all
+        - Intermediate values (0.25, 0.5, 0.75) indicate partial relevance
+
+        IMPORTANT: Return ONLY a number between 0 and 1. Do not explain your reasoning or call any functions.
+
+        Question: {query}
+        Answer: {answer}
+
+        Score (0-1):
+
+    context_precision:
+      instruction: |
+        You are an evaluation assistant. Your task is to evaluate if the answer uses the context precisely.
+        
+        Score from 0 to 1, where:
+        - 1 means perfect precision in using the context
+        - 0 means poor precision in using the context
+        - Intermediate values (0.25, 0.5, 0.75) indicate partial precision
+
+        IMPORTANT: Return ONLY a number between 0 and 1. Do not explain your reasoning or call any functions.
+
+        Context: {context}
+        Answer: {answer}
+
+        Score (0-1):
+
+    function_calls:
+      instruction: |
+        You are an evaluation assistant. Your task is to evaluate if the agent made the correct function calls.
+        
+        Score from 0 to 1, where:
+        - 1 means all required function calls were made correctly
+        - 0 means no required function calls were made or they were incorrect
+        - Intermediate values (0.25, 0.5, 0.75) indicate partial correctness
+
+        IMPORTANT: Return ONLY a number between 0 and 1. Do not explain your reasoning or call any functions.
+
+        Expected function calls: {expected_calls}
+        Actual function calls: {actual_calls}
+
+        Score (0-1):
+
+    task_coordination:
+      instruction: |
+        You are an evaluation assistant. Your task is to evaluate if the agent coordinated tasks correctly.
+        
+        Score from 0 to 1, where:
+        - 1 means perfect task coordination and sequencing
+        - 0 means poor task coordination or incorrect sequencing
+        - Intermediate values (0.25, 0.5, 0.75) indicate partial correctness
+
+        IMPORTANT: Return ONLY a number between 0 and 1. Do not explain your reasoning or call any functions.
+
+        Expected task sequence: {expected_sequence}
+        Actual task sequence: {actual_sequence}
+
+        Score (0-1):

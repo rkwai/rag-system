@@ -2,11 +2,16 @@ import asyncio
 import pandas as pd
 import json
 import os
+import yaml
 import logging
 from logging.handlers import RotatingFileHandler
 from utils.agent_interface import call_executive_agent
 from utils.llm_interface import LLMInterface
 from datasets import Dataset
+
+# Load config
+with open("config/config.yaml", 'r') as f:
+    config = yaml.safe_load(f)
 
 # Configure logging
 log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
@@ -106,10 +111,10 @@ def load_data(file_path: str) -> pd.DataFrame:
         logger.error(f"Error loading data from {file_path}: {str(e)}")
         raise
 
-async def generate_answer(query: str) -> dict:
+async def generate_answer(query: str, context: str) -> dict:
     """Generate a single answer using the executive agent"""
     try:
-        return await call_executive_agent(query)
+        return await call_executive_agent(query, context)
     except Exception as e:
         logger.error(f"Error generating answer: {str(e)}")
         return {'error': str(e)}
@@ -121,7 +126,7 @@ async def generate_answers(data: pd.DataFrame) -> pd.DataFrame:
         
         # Generate answers concurrently
         answers = await asyncio.gather(*[
-            generate_answer(query) for query in data['query']
+            generate_answer(row['query'], row['context']) for _, row in data.iterrows()
         ])
         data['answer'] = answers
         
@@ -143,117 +148,133 @@ async def generate_answers(data: pd.DataFrame) -> pd.DataFrame:
         logger.error(f"Error generating answers: {str(e)}")
         raise
 
-async def evaluate_faithfulness(llm: LLMInterface, answer: str, context: str) -> float:
+async def evaluate_faithfulness(answer: dict, context: str) -> float:
     """Evaluate if the answer is faithful to the context"""
     try:
-        prompt = f"""
-        Given the following context and answer, evaluate if the answer is faithful to the context.
-        Score from 0 to 1, where 1 means completely faithful and 0 means not faithful at all.
-        
-        Context: {context}
-        Answer: {answer}
-        
-        Score (0-1):"""
-        
+        # Get prompt from config
+        prompt = config['prompts']['evaluation']['faithfulness']['instruction'].format(
+            context=context,
+            answer=answer.get('content', '')
+        )
+
         response = await llm.generate_response(
-            system_prompt="You are an evaluation assistant. Provide numerical scores only.",
+            system_prompt=config['prompts']['evaluation']['system_prompt'],
             user_prompt=prompt
         )
         
-        score = float(response.get('content', '0').strip())
-        return min(max(score, 0), 1)  # Clamp between 0 and 1
+        # Extract just the numerical score
+        score_text = response.get('content', '0.0').strip()
+        return float(score_text)
+        
     except Exception as e:
         logger.error(f"Error evaluating faithfulness: {str(e)}")
-        return 0
+        return 0.0
 
-async def evaluate_answer_relevancy(llm: LLMInterface, answer: str, question: str) -> float:
+async def evaluate_answer_relevancy(answer: dict, query: str) -> float:
     """Evaluate if the answer is relevant to the question"""
     try:
-        prompt = f"""
-        Given the following question and answer, evaluate if the answer is relevant to the question.
-        Score from 0 to 1, where 1 means completely relevant and 0 means not relevant at all.
-        
-        Question: {question}
-        Answer: {answer}
-        
-        Score (0-1):"""
-        
+        # Get prompt from config
+        prompt = config['prompts']['evaluation']['answer_relevancy']['instruction'].format(
+            query=query,
+            answer=answer.get('content', '')
+        )
+
         response = await llm.generate_response(
-            system_prompt="You are an evaluation assistant. Provide numerical scores only.",
+            system_prompt=config['prompts']['evaluation']['system_prompt'],
             user_prompt=prompt
         )
         
-        score = float(response.get('content', '0').strip())
-        return min(max(score, 0), 1)  # Clamp between 0 and 1
+        # Extract just the numerical score
+        score_text = response.get('content', '0.0').strip()
+        return float(score_text)
+        
     except Exception as e:
         logger.error(f"Error evaluating answer relevancy: {str(e)}")
-        return 0
+        return 0.0
 
-async def evaluate_context_precision(llm: LLMInterface, answer: str, context: str) -> float:
+async def evaluate_context_precision(answer: dict, context: str) -> float:
     """Evaluate if the answer uses the context precisely"""
     try:
-        prompt = f"""
-        Given the following context and answer, evaluate if the answer uses the context precisely.
-        Score from 0 to 1, where 1 means perfect precision and 0 means poor precision.
-        
-        Context: {context}
-        Answer: {answer}
-        
-        Score (0-1):"""
-        
+        # Get prompt from config
+        prompt = config['prompts']['evaluation']['context_precision']['instruction'].format(
+            context=context,
+            answer=answer.get('content', '')
+        )
+
         response = await llm.generate_response(
-            system_prompt="You are an evaluation assistant. Provide numerical scores only.",
+            system_prompt=config['prompts']['evaluation']['system_prompt'],
             user_prompt=prompt
         )
         
-        score = float(response.get('content', '0').strip())
-        return min(max(score, 0), 1)  # Clamp between 0 and 1
+        # Extract just the numerical score
+        score_text = response.get('content', '0.0').strip()
+        return float(score_text)
+        
     except Exception as e:
         logger.error(f"Error evaluating context precision: {str(e)}")
-        return 0
+        return 0.0
 
 async def run_evaluation(eval_data: pd.DataFrame):
-    """Run the evaluation metrics"""
+    """Run evaluation metrics"""
     try:
         logger.info("Running evaluation metrics")
         
-        # Add custom metrics for agent calls and coordination
-        eval_data['agent_calls_score'] = eval_data['agent_calls_valid'].astype(float)
-        eval_data['task_coordination_score'] = eval_data['task_coordination_valid'].astype(float)
-        
-        # Calculate custom metrics
-        agent_calls_accuracy = eval_data['agent_calls_score'].mean()
-        task_coordination_accuracy = eval_data['task_coordination_score'].mean()
-        
-        # Initialize LLM for evaluation
-        llm = LLMInterface()
+        # Validate agent calls and task coordination
+        eval_data['agent_calls_valid'] = eval_data.apply(
+            lambda row: validate_agent_calls(row['answer'], row['ground_truth']['function_calls']), 
+            axis=1
+        )
+        eval_data['task_coordination_valid'] = eval_data.apply(
+            lambda row: validate_task_coordination(row['answer'], row['ground_truth']['function_calls']), 
+            axis=1
+        )
         
         # Run evaluation metrics concurrently
         faithfulness_scores = await asyncio.gather(*[
-            evaluate_faithfulness(llm, row['response'], row['context'])
+            evaluate_faithfulness(row['answer'], row['context'])
             for _, row in eval_data.iterrows()
         ])
         
         relevancy_scores = await asyncio.gather(*[
-            evaluate_answer_relevancy(llm, row['response'], row['query'])
+            evaluate_answer_relevancy(row['answer'], row['query'])
             for _, row in eval_data.iterrows()
         ])
         
         precision_scores = await asyncio.gather(*[
-            evaluate_context_precision(llm, row['response'], row['context'])
+            evaluate_context_precision(row['answer'], row['context'])
             for _, row in eval_data.iterrows()
         ])
         
         # Calculate average scores
-        results = {
-            'agent_calls_accuracy': agent_calls_accuracy,
-            'task_coordination_accuracy': task_coordination_accuracy,
-            'faithfulness': sum(faithfulness_scores) / len(faithfulness_scores),
-            'answer_relevancy': sum(relevancy_scores) / len(relevancy_scores),
-            'context_precision': sum(precision_scores) / len(precision_scores)
-        }
+        agent_calls_accuracy = eval_data['agent_calls_valid'].mean() * 100
+        task_coordination_accuracy = eval_data['task_coordination_valid'].mean() * 100
+        faithfulness_score = sum(faithfulness_scores) / len(faithfulness_scores) * 100
+        relevancy_score = sum(relevancy_scores) / len(relevancy_scores) * 100
+        precision_score = sum(precision_scores) / len(precision_scores) * 100
         
-        return results
+        # Save results
+        results = pd.DataFrame({
+            'query': eval_data['query'],
+            'context': eval_data['context'],
+            'answer': eval_data['answer'].apply(lambda x: x.get('content', '')),
+            'agent_calls_valid': eval_data['agent_calls_valid'],
+            'task_coordination_valid': eval_data['task_coordination_valid'],
+            'faithfulness_score': faithfulness_scores,
+            'relevancy_score': relevancy_scores,
+            'precision_score': precision_scores
+        })
+        
+        os.makedirs('eval_results', exist_ok=True)
+        results.to_csv('eval_results/executive_agent_results.csv', index=False)
+        logger.info("Results saved successfully")
+        
+        # Log metrics
+        logger.info(f"Agent Calls Accuracy: {agent_calls_accuracy:.2f}%")
+        logger.info(f"Task Coordination Accuracy: {task_coordination_accuracy:.2f}%")
+        logger.info(f"Faithfulness Score: {faithfulness_score:.2f}%")
+        logger.info(f"Answer Relevancy Score: {relevancy_score:.2f}%")
+        logger.info(f"Context Precision Score: {precision_score:.2f}%")
+        
     except Exception as e:
         logger.error(f"Error running evaluation: {str(e)}")
         raise
