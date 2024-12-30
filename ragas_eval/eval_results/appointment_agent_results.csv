@@ -1,0 +1,3 @@
+timestamp,num_examples,faithfulness_score,answer_relevancy_score,context_relevancy_score,function_calls_accuracy
+2024-12-30 04:01:51.544523,3,0.0,0.0,0.0,33.33333333333333
+2024-12-30 04:01:51.544523,3,0.0,0.0,0.0,33.33333333333333

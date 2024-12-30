@@ -1,0 +1,49 @@
+[
+  {
+    "query": "Research the latest developments in quantum computing",
+    "contexts": [
+      "Focus areas: Quantum supremacy, Error correction, Industry applications. Need comprehensive analysis.",
+      "Research requires gathering information about recent quantum computing breakthroughs.",
+      "Analysis should cover technical advancements and practical applications."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Information search should be performed first to gather quantum computing data",
+      "Data analysis should follow to process the gathered information",
+      "Findings should be summarized in a comprehensive report",
+      "Expected sequence: search_information -> analyze_data -> summarize_findings",
+      "All three steps needed for complete research process"
+    ]
+  },
+  {
+    "query": "Analyze market trends in renewable energy",
+    "contexts": [
+      "Key aspects: Solar, Wind, Storage technologies. Include market size and growth projections.",
+      "Analysis should focus on current market dynamics and future projections.",
+      "Research needs to cover multiple renewable energy sectors."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Information search should be conducted to gather market data",
+      "Data analysis should be performed on market trends",
+      "Expected sequence: search_information -> analyze_data",
+      "Focus should be on market size and growth trends"
+    ]
+  },
+  {
+    "query": "Investigate emerging cybersecurity threats",
+    "contexts": [
+      "Areas: Zero-day exploits, Ransomware evolution, AI-powered attacks. Need detailed threat analysis.",
+      "Investigation requires comprehensive research on current threats.",
+      "Analysis should identify patterns and emerging trends in cyber attacks."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Information search should cover recent cybersecurity incidents",
+      "Data analysis should identify threat patterns and trends",
+      "Findings should be summarized in a threat assessment report",
+      "Expected sequence: search_information -> analyze_data -> summarize_findings",
+      "Complete threat analysis workflow must be followed"
+    ]
+  }
+]

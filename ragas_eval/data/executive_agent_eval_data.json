@@ -1,0 +1,48 @@
+[
+  {
+    "query": "Research market trends and send an email summary to the team",
+    "contexts": [
+      "Need to analyze recent market developments in AI and share findings with the team.",
+      "Task requires gathering market research data and communicating findings via email.",
+      "Team needs to be informed about AI market trends through a comprehensive email summary."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Research agent should be called first to analyze market trends",
+      "Email agent should be called after research to share findings",
+      "Expected sequence: research_agent -> email_agent",
+      "Research findings must be communicated to team via email"
+    ]
+  },
+  {
+    "query": "Write an article about our findings and schedule a review meeting",
+    "contexts": [
+      "Research completed on user engagement metrics. Need to create content and discuss with stakeholders.",
+      "Findings need to be converted into an article format for stakeholder review.",
+      "Review meeting needs to be scheduled to discuss the article with stakeholders."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Article writing agent should be called to create content from findings",
+      "Appointment agent should be called to schedule the review meeting",
+      "Expected sequence: article_writing_agent -> appointment_agent",
+      "Article must be written before scheduling review meeting"
+    ]
+  },
+  {
+    "query": "Compile research data, write a report, and send it to stakeholders",
+    "contexts": [
+      "Quarterly performance data available. Need comprehensive analysis and stakeholder communication.",
+      "Data needs to be researched, compiled into a report, and shared with stakeholders.",
+      "Task involves research analysis, report writing, and email communication."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Research agent should be called first to compile data",
+      "Article writing agent should be called to create the report",
+      "Email agent should be called to send report to stakeholders",
+      "Expected sequence: research_agent -> article_writing_agent -> email_agent",
+      "All three steps are required for complete task execution"
+    ]
+  }
+]

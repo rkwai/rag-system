@@ -1,0 +1,141 @@
+[
+  {
+    "query": "Send an email to John about the project update",
+    "context": "Project status: 80% complete, ahead of schedule. Key milestones: Database migration finished, UI redesign in progress.",
+    "ground_truth": {
+      "function_calls": [
+        "compose_email",
+        "send_email"
+      ],
+      "parameters": {
+        "compose_email": {
+          "body": {
+            "type": "string",
+            "required": true,
+            "min_length": 50,
+            "should_contain": ["project", "status", "milestone"]
+          }
+        },
+        "send_email": {
+          "recipient": {
+            "type": "array",
+            "required": true,
+            "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "min_items": 1
+          },
+          "subject": {
+            "type": "string",
+            "required": true,
+            "min_length": 1,
+            "should_contain": ["Project Update", "Status"]
+          },
+          "body": {
+            "type": "string",
+            "required": true,
+            "min_length": 50
+          }
+        }
+      }
+    }
+  },
+  {
+    "query": "Forward the project proposal to the client and CC my manager",
+    "context": "Project proposal document is ready for client review",
+    "ground_truth": {
+      "function_calls": [
+        "compose_email",
+        "attach_file",
+        "send_email"
+      ],
+      "parameters": {
+        "compose_email": {
+          "body": {
+            "type": "string",
+            "required": true,
+            "min_length": 30
+          }
+        },
+        "attach_file": {
+          "file_path": {
+            "type": "string",
+            "required": true,
+            "should_contain": ["proposal", "project"]
+          }
+        },
+        "send_email": {
+          "recipient": {
+            "type": "array",
+            "required": true,
+            "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "min_items": 1
+          },
+          "subject": {
+            "type": "string",
+            "required": true,
+            "should_contain": ["Project Proposal", "proposal"]
+          },
+          "body": {
+            "type": "string",
+            "required": true,
+            "min_length": 30
+          },
+          "cc": {
+            "type": "array",
+            "required": true,
+            "min_items": 1,
+            "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+          },
+          "attachments": {
+            "type": "array",
+            "required": true,
+            "min_items": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "query": "Send a confidential update to the board using BCC",
+    "context": "Quarterly financial results need to be shared privately",
+    "ground_truth": {
+      "function_calls": [
+        "compose_email",
+        "send_email"
+      ],
+      "parameters": {
+        "compose_email": {
+          "body": {
+            "type": "string",
+            "required": true,
+            "min_length": 100,
+            "should_contain": ["confidential", "quarterly", "financial"]
+          }
+        },
+        "send_email": {
+          "recipient": {
+            "type": "array",
+            "required": true,
+            "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "min_items": 1
+          },
+          "subject": {
+            "type": "string",
+            "required": true,
+            "should_contain": ["Confidential", "Private"]
+          },
+          "body": {
+            "type": "string",
+            "required": true,
+            "min_length": 100
+          },
+          "bcc": {
+            "type": "array",
+            "required": true,
+            "min_items": 1,
+            "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+          }
+        }
+      }
+    }
+  }
+] 

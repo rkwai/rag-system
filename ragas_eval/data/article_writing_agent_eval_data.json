@@ -1,0 +1,56 @@
+[
+  {
+    "query": "Write an article about the impact of AI on healthcare",
+    "contexts": [
+      "Recent studies show AI diagnostic systems achieve 95% accuracy in medical imaging analysis, particularly in detecting early-stage cancers and abnormalities.",
+      "Machine learning models have demonstrated 85% accuracy in predicting patient outcomes and potential complications, enabling proactive interventions.",
+      "Healthcare facilities implementing AI-powered treatment planning report a 60% reduction in planning time and 40% improvement in overall efficiency.",
+      "AI integration in healthcare has led to a 30% reduction in diagnostic errors and a 25% decrease in unnecessary procedures.",
+      "Surveys indicate 78% of healthcare providers believe AI tools have significantly improved their decision-making process."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "AI diagnostic systems have achieved high accuracy rates in medical imaging",
+      "Machine learning models effectively predict patient outcomes",
+      "AI reduces treatment planning time significantly",
+      "Healthcare providers report improved efficiency with AI assistance",
+      "AI helps reduce diagnostic errors and unnecessary procedures"
+    ]
+  },
+  {
+    "query": "Write an article about sustainable energy solutions",
+    "contexts": [
+      "Solar energy installation costs have decreased by 80% over the past decade, making it increasingly accessible to homeowners and businesses.",
+      "Wind power now generates 8.4% of global electricity production, with capacity growing by 53% annually in emerging markets.",
+      "The renewable energy sector has created 11.5 million jobs globally, with solar and wind industries leading employment growth.",
+      "Energy storage technology has seen a 300% increase in capacity since 2017, enabling better integration of renewable sources.",
+      "Studies show that transitioning to 100% renewable energy could reduce global energy costs by 61% by 2050."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Solar energy costs have decreased significantly over the past decade",
+      "Wind power contributes substantially to global electricity generation",
+      "Renewable energy sector creates millions of jobs globally",
+      "Energy storage capacity has increased dramatically",
+      "Renewable energy transition could lead to significant cost savings"
+    ]
+  },
+  {
+    "query": "Write an article about remote work trends",
+    "contexts": [
+      "58% of the US workforce now works remotely at least one day per week, with 35% being fully remote.",
+      "Companies implementing remote work policies report an average of 22% reduction in operational costs and 15% decrease in turnover.",
+      "Remote worker productivity has increased by 13% compared to office-based work, according to recent productivity studies.",
+      "87% of employees report better work-life balance with remote work options, leading to 23% higher job satisfaction.",
+      "Investment in remote work technologies has grown by 500% since 2019, with collaboration tools seeing the highest adoption."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Majority of US workforce has adopted some form of remote work",
+      "Companies see cost savings and reduced turnover with remote work",
+      "Remote work shows increased productivity compared to office work",
+      "Employees report improved work-life balance with remote options",
+      "Significant investment growth in remote work technologies"
+    ]
+  }
+]

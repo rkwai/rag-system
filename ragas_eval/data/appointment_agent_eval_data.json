@@ -1,0 +1,47 @@
+[
+  {
+    "query": "Schedule a team meeting for next week",
+    "contexts": [
+      "Team availability: Monday and Wednesday afternoons are open. Need to discuss Q4 planning.",
+      "Meeting requires coordination of team members' schedules.",
+      "Q4 planning discussion needs to be scheduled in available time slots."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Availability should be checked before scheduling",
+      "Meeting should be scheduled after confirming availability",
+      "Expected sequence: check_availability -> schedule_meeting",
+      "Meeting must be scheduled during open afternoon slots"
+    ]
+  },
+  {
+    "query": "Find a time slot for the project review",
+    "contexts": [
+      "Need 2-hour slot between Tuesday-Thursday. Attendees: John, Sarah, Mike.",
+      "Multiple attendees' schedules need to be coordinated.",
+      "Time slot must accommodate specific day and duration constraints."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Availability check is required for all attendees",
+      "Expected sequence: check_availability",
+      "Must find 2-hour slot within specified days",
+      "All listed attendees must be available"
+    ]
+  },
+  {
+    "query": "Set up the quarterly review meeting",
+    "contexts": [
+      "All department heads must attend. Duration: 3 hours. Preferred time: Morning slots.",
+      "Meeting requires coordination of multiple department heads.",
+      "Long duration meeting needs careful scheduling consideration."
+    ],
+    "answer": "",
+    "ground_truths": [
+      "Availability of all department heads must be checked",
+      "Meeting should be scheduled in morning time slots",
+      "Expected sequence: check_availability -> schedule_meeting",
+      "Three-hour duration must be accommodated"
+    ]
+  }
+]

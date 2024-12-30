@@ -1,0 +1,22 @@
+{
+  "routing_accuracy": [
+    1,
+    1,
+    1
+  ],
+  "sequence_accuracy": [
+    1,
+    1,
+    1
+  ],
+  "context_usage": [
+    1,
+    1,
+    1
+  ],
+  "completeness": [
+    1,
+    1,
+    0
+  ]
+}
